@@ -1,0 +1,74 @@
+// Use the asset editor to check whats available.
+$C = "../Common.ui";
+
+$C.@PageOverlay {
+
+  $C.@Container {
+    Anchor: (Width: 920, Height: 520);
+
+    #Title {
+      Group {
+        $C.@Title {
+          @Text = "Voice Chat";
+        }
+      }
+    }
+
+    #Content {
+      LayoutMode: Top;
+      Padding: (Left: 20, Right: 20);
+
+      Label {
+        Text: "Connect your browser to voice chat using the link below.";
+        Style: (
+          FontSize: 16,
+          TextColor: #d0d0d0
+        );
+        Anchor: (Bottom: 6, Top: 10);
+      }
+
+      Label {
+        Text: "Copy the link and open it in your browser to connect to the voice server.";
+        Style: (
+          FontSize: 13,
+          TextColor: #9fb0bb
+        );
+        Anchor: (Bottom: 18);
+      }
+
+      $C.@TextField #LinkField {
+        Anchor: (Height: 42, Bottom: 16);
+        Style: (
+          FontSize: 14,
+          TextColor: #ffffff(0.9)
+        );
+        IsReadOnly: true;
+      }
+
+      Label {
+        Text: "For now you will need to copy and paste the link manually. Once a button can open your browser, we will add it here.";
+        Style: (
+          FontSize: 12,
+          TextColor: #9fb0bb
+        );
+        Anchor: (Bottom: 0);
+      }
+
+      Label {FlexWeight: 1;}
+
+      Group #InteractionButtons {
+        LayoutMode: Right;
+        Anchor: (Bottom: 8);
+
+        $C.@CancelTextButton #CloseButton {
+          Text: "Close";
+          Padding: (Left: 14, Right: 14, Top: 6, Bottom: 6);
+          Anchor: (Right: 10, Bottom: 10);
+          Overscroll: false;
+        }
+      }
+    }
+  }
+}
+
+$C.@BackButton {}

@@ -1,0 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;500&family=Space+Grotesk:wght@400;600&display=swap");
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+    background: radial-gradient(
+            circle at top,
+            #141E2A 0%,
+            #000000 100%
+    );
+    color: #ffffff;
+    min-height: 100vh;
+}
+

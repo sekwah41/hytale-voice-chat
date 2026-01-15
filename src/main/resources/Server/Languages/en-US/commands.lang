@@ -1,0 +1,2 @@
+commands.errors.voicechat.notLinked=You need to link your browser to your voice chat first. Use /voice link to get started.
+commands.voicechat.link=Voice chat link:
