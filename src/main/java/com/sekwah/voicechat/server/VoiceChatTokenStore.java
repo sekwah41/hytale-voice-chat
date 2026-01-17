@@ -8,14 +8,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class VoiceChatTokenStore {
 
-    private final Map<String, Long> tokens = new ConcurrentHashMap<>();
+    private final Map<String, TokenEntry> tokensByValue = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, Long>> tokensByUser = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
-    public String createToken(Duration ttl) {
+    public String createToken(UUID userId, Duration ttl) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId must be provided");
+        }
         purgeExpired();
         String token = new UUID(random.nextLong(), random.nextLong()).toString().replace("-", "");
         long expiresAt = System.currentTimeMillis() + ttl.toMillis();
-        tokens.put(token, expiresAt);
+        tokensByValue.put(token, new TokenEntry(userId, expiresAt));
+        tokensByUser
+            .computeIfAbsent(userId, ignored -> new ConcurrentHashMap<>())
+            .put(token, expiresAt);
         return token;
     }
 
@@ -23,15 +30,43 @@ public class VoiceChatTokenStore {
         if (token == null || token.isBlank()) {
             return false;
         }
-        Long expiresAt = tokens.remove(token);
-        if (expiresAt == null) {
+        TokenEntry entry = tokensByValue.remove(token);
+        if (entry == null) {
             return false;
         }
-        return expiresAt >= System.currentTimeMillis();
+        removeTokenForUser(entry.userId, token);
+        return entry.expiresAt >= System.currentTimeMillis();
     }
 
     private void purgeExpired() {
         long now = System.currentTimeMillis();
-        tokens.entrySet().removeIf(entry -> entry.getValue() < now);
+        tokensByValue.entrySet().removeIf(entry -> {
+            if (entry.getValue().expiresAt < now) {
+                removeTokenForUser(entry.getValue().userId, entry.getKey());
+                return true;
+            }
+            return false;
+        });
+    }
+
+    private void removeTokenForUser(UUID userId, String token) {
+        Map<String, Long> userTokens = tokensByUser.get(userId);
+        if (userTokens == null) {
+            return;
+        }
+        userTokens.remove(token);
+        if (userTokens.isEmpty()) {
+            tokensByUser.remove(userId, userTokens);
+        }
+    }
+
+    private static final class TokenEntry {
+        private final UUID userId;
+        private final long expiresAt;
+
+        private TokenEntry(UUID userId, long expiresAt) {
+            this.userId = userId;
+            this.expiresAt = expiresAt;
+        }
     }
 }

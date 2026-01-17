@@ -5,6 +5,7 @@ import com.hypixel.hytale.server.core.util.Config;
 import com.sekwah.voicechat.config.VoiceChatConfig;
 
 import java.time.Duration;
+import java.util.UUID;
 
 public class VoiceChatService {
 
@@ -35,10 +36,10 @@ public class VoiceChatService {
         }
     }
 
-    public String createSessionUrl() {
+    public String createSessionUrl(UUID userId) {
         VoiceChatConfig current = config.get();
         Duration ttl = Duration.ofSeconds(Math.max(30, current.getVoiceChatTokenTtlSeconds()));
-        String token = tokens.createToken(ttl);
+        String token = tokens.createToken(userId, ttl);
         return appendToken(publicUrl, token);
     }
 
