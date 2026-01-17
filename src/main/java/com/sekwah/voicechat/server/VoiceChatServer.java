@@ -76,7 +76,7 @@ public class VoiceChatServer {
                             ch.pipeline().addLast(new ChunkedWriteHandler());
                             ch.pipeline().addLast(new VoiceChatHttpHandler(devForwardingEnabled));
                             ch.pipeline().addLast(new WebSocketServerProtocolHandler("/voice/ws", null, true));
-                            ch.pipeline().addLast(new VoiceChatWebSocketHandler(room, tokens, gson));
+                            ch.pipeline().addLast(new VoiceChatWebSocketHandler(room, tokens, logger, gson));
                         }
                     })
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
@@ -86,7 +86,7 @@ public class VoiceChatServer {
                 attempts++;
                 try {
                     channel = bootstrap.bind(port).syncUninterruptibly().channel();
-                    logger.atInfo().log("Voice chat server listening on port %s", port);
+                    logger.atInfo().log("Server listening on port %s", port);
                     channel.closeFuture().syncUninterruptibly();
                     break;
                 } catch (Exception e) {

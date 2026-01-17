@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.hypixel.hytale.logger.HytaleLogger;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
@@ -20,10 +21,12 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
     private final VoiceChatRoom room;
     private final VoiceChatTokenStore tokens;
     private final Gson gson;
+    private final HytaleLogger logger;
 
-    public VoiceChatWebSocketHandler(VoiceChatRoom room, VoiceChatTokenStore tokens, Gson gson) {
+    public VoiceChatWebSocketHandler(VoiceChatRoom room, VoiceChatTokenStore tokens, HytaleLogger logger, Gson gson) {
         this.room = room;
         this.tokens = tokens;
+        this.logger = logger;
         this.gson = gson;
     }
 
@@ -78,6 +81,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             leave.addProperty("id", id);
             room.broadcast(leave, id);
         }
+        this.logger.atInfo().log("Voice chat client disconnected.");
     }
 
     private void handleHello(ChannelHandlerContext ctx, JsonObject payload) {
@@ -86,6 +90,8 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             sendError(ctx, "Invalid or expired token. Please re-run /voice chat command.");
             return;
         }
+
+        this.logger.atInfo().log("Voice chat client connected.");
 
         String id = UUID.randomUUID().toString().replace("-", "");
         ctx.channel().attr(CLIENT_ID).set(id);
