@@ -50,6 +50,10 @@ tasks.named<ProcessResources>("processResources") {
         expand(replaceProperties)
     }
 
+    from("hytale-voice-chat-frontend/dist") {
+        into("voice")
+    }
+
     inputs.properties(replaceProperties)
 }
 

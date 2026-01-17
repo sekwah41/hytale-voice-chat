@@ -18,11 +18,13 @@ import io.netty.handler.codec.http.QueryStringDecoder;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class VoiceChatHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
+    private static final Map<String, String> CONTENT_TYPES = createContentTypes();
     private final boolean devForwardingEnabled;
-
     public VoiceChatHttpHandler(boolean devForwardingEnabled) {
         this.devForwardingEnabled = devForwardingEnabled;
     }
@@ -51,31 +53,24 @@ public class VoiceChatHttpHandler extends SimpleChannelInboundHandler<FullHttpRe
 
         switch (path) {
             case "/voice", "/voice/":
-                sendResource(ctx, request, "web/index.html", "text/html; charset=UTF-8");
-                break;
-            case "/voice/app.js":
-                sendResource(ctx, request, "web/app.js", "application/javascript");
-                break;
-            case "/voice/style.css":
-                sendResource(ctx, request, "web/style.css", "text/css");
+                if (!sendResource(ctx, request, "voice/index.html")) {
+                    sendResponse(ctx, request, HttpResponseStatus.NOT_FOUND, "Not found.");
+                }
                 break;
             default:
+                if (path.startsWith("/voice/")) {
+                    String relativePath = path.substring("/voice/".length());
+                    String resourcePath = normalizeResourcePath(relativePath);
+                    if (resourcePath != null) {
+                        if (sendResource(ctx, request, "voice/" + resourcePath)) {
+                            break;
+                        }
+                        sendResource(ctx, request, "voice/index.html");
+                        break;
+                    }
+                }
                 sendResponse(ctx, request, HttpResponseStatus.NOT_FOUND, "Not found.");
         }
-    }
-
-    private void sendResource(ChannelHandlerContext ctx, FullHttpRequest request, String resourcePath, String contentType) {
-        byte[] bytes = readResource(resourcePath);
-        if (bytes == null) {
-            sendResponse(ctx, request, HttpResponseStatus.NOT_FOUND, "Not found.");
-            return;
-        }
-        ByteBuf content = Unpooled.wrappedBuffer(bytes);
-        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, content);
-        response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
-        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
-        response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-store");
-        writeResponse(ctx, request, response);
     }
 
     private void sendResponse(ChannelHandlerContext ctx, FullHttpRequest request, HttpResponseStatus status, String message) {
@@ -125,6 +120,21 @@ public class VoiceChatHttpHandler extends SimpleChannelInboundHandler<FullHttpRe
         return "/";
     }
 
+    private boolean sendResource(ChannelHandlerContext ctx, FullHttpRequest request, String resourcePath) {
+        byte[] bytes = readResource(resourcePath);
+        if (bytes == null) {
+            return false;
+        }
+        String contentType = resolveContentType(resourcePath);
+        ByteBuf content = Unpooled.wrappedBuffer(bytes);
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, content);
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
+        response.headers().set(HttpHeaderNames.CACHE_CONTROL, "no-store");
+        writeResponse(ctx, request, response);
+        return true;
+    }
+
     private void writeResponse(ChannelHandlerContext ctx, FullHttpRequest request, FullHttpResponse response) {
         boolean keepAlive = HttpUtil.isKeepAlive(request);
         if (keepAlive) {
@@ -144,5 +154,52 @@ public class VoiceChatHttpHandler extends SimpleChannelInboundHandler<FullHttpRe
         } catch (IOException e) {
             return null;
         }
+    }
+
+    private static Map<String, String> createContentTypes() {
+        Map<String, String> types = new HashMap<>();
+        types.put("html", "text/html; charset=UTF-8");
+        types.put("js", "application/javascript");
+        types.put("css", "text/css");
+        types.put("map", "application/json");
+        types.put("json", "application/json");
+        types.put("svg", "image/svg+xml");
+        types.put("png", "image/png");
+        types.put("jpg", "image/jpeg");
+        types.put("jpeg", "image/jpeg");
+        types.put("webp", "image/webp");
+        types.put("gif", "image/gif");
+        types.put("ico", "image/x-icon");
+        types.put("woff", "font/woff");
+        types.put("woff2", "font/woff2");
+        types.put("ttf", "font/ttf");
+        return types;
+    }
+
+    private String resolveContentType(String resourcePath) {
+        String name = resourcePath;
+        int slashIndex = name.lastIndexOf('/');
+        if (slashIndex > -1) {
+            name = name.substring(slashIndex + 1);
+        }
+        int dotIndex = name.lastIndexOf('.');
+        if (dotIndex > -1 && dotIndex < name.length() - 1) {
+            String extension = name.substring(dotIndex + 1).toLowerCase();
+            String contentType = CONTENT_TYPES.get(extension);
+            if (contentType != null) {
+                return contentType;
+            }
+        }
+        return "application/octet-stream";
+    }
+
+    private String normalizeResourcePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return null;
+        }
+        if (relativePath.startsWith("/") || relativePath.contains("..")) {
+            return null;
+        }
+        return relativePath;
     }
 }

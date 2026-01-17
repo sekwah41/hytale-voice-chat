@@ -1,5 +1,6 @@
 package com.sekwah.voicechat.server;
 
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.util.Config;
 import com.sekwah.voicechat.config.VoiceChatConfig;
 
@@ -37,26 +38,25 @@ public class VoiceChatService {
         VoiceChatConfig current = config.get();
         Duration ttl = Duration.ofSeconds(Math.max(30, current.getVoiceChatTokenTtlSeconds()));
         String token = tokens.createToken(userId, ttl);
-        return appendUrlArgs(publicUrl, token);
+        return appendToken(publicUrl, token);
     }
 
     private String resolvePublicUrl(VoiceChatConfig current, int port) {
-        String base;
-        if (current.isVoiceChatDevForwardingEnabled()) {
-            base = "http://localhost:5173/";
-        } else {
-            base = "https://www.sekwah.com/voice/";
+        String base = current.getVoiceChatPublicUrl();
+        if (base == null || base.isBlank()) {
+            if (current.isVoiceChatDevForwardingEnabled()) {
+                base = "http://localhost:5173/";
+            } else {
+                base = "http://localhost:" + port + "/voice/";
+            }
         }
         return base;
     }
 
-    private String appendUrlArgs(String baseUrl, String token) {
-        String address = this.config.get().getVoiceChatPublicAddress();
-        int port = this.config.get().getVoiceChatPort();
-        String urlParams = "token=" + token + "&address=" + address + ":" + port;
+    private String appendToken(String baseUrl, String token) {
         if (baseUrl.contains("?")) {
-            return baseUrl + "&" + urlParams;
+            return baseUrl + "&token=" + token;
         }
-        return baseUrl + "?" + urlParams;
+        return baseUrl + "?token=" + token;
     }
 }
