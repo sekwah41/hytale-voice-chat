@@ -10,9 +10,9 @@ public class VoiceChatConfig {
             .append(new KeyedCodec<Integer>("VoiceChatPort", Codec.INTEGER),
                     (config, value) -> config.VoiceChatPort = value,
                     (config) -> config.VoiceChatPort).add()
-            .append(new KeyedCodec<String>("VoiceChatPublicAddress", Codec.STRING),
-                    (config, value) -> config.VoiceChatPublicAddress = value,
-                    (config) -> config.VoiceChatPublicAddress).add()
+            .append(new KeyedCodec<String>("VoiceChatPublicUrl", Codec.STRING),
+                    (config, value) -> config.VoiceChatPublicUrl = value,
+                    (config) -> config.VoiceChatPublicUrl).add()
             .append(new KeyedCodec<Integer>("VoiceChatTokenTtlSeconds", Codec.INTEGER),
                     (config, value) -> config.VoiceChatTokenTtlSeconds = value,
                     (config) -> config.VoiceChatTokenTtlSeconds).add()
@@ -22,7 +22,7 @@ public class VoiceChatConfig {
             .build();
 
     private int VoiceChatPort = 24454;
-    private String VoiceChatPublicAddress = "";
+    private String VoiceChatPublicUrl = "";
     private int VoiceChatTokenTtlSeconds = 300;
     private boolean VoiceChatDevForwardingEnabled = false;
 
@@ -30,8 +30,8 @@ public class VoiceChatConfig {
         return VoiceChatPort;
     }
 
-    public String getVoiceChatPublicAddress() {
-        return VoiceChatPublicAddress;
+    public String getVoiceChatPublicUrl() {
+        return VoiceChatPublicUrl;
     }
 
     public int getVoiceChatTokenTtlSeconds() {
