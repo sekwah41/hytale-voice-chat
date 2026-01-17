@@ -15,7 +15,7 @@ public class VoiceChat extends JavaPlugin {
 
     public static Config<VoiceChatConfig> CONFIG;
 
-    private static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
+    public static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private VoiceChatService service;
 
     public VoiceChat(JavaPluginInit init) {
@@ -28,7 +28,7 @@ public class VoiceChat extends JavaPlugin {
     protected void setup() {
         super.setup();
         CONFIG.save();
-        this.service = new VoiceChatService(CONFIG, LOGGER);
+        this.service = new VoiceChatService(CONFIG);
         this.service.start();
         this.getCommandRegistry().registerCommand(new VoiceChatCommand(this.service));
     }

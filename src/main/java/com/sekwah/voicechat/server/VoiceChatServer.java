@@ -2,6 +2,7 @@ package com.sekwah.voicechat.server;
 
 import com.google.gson.Gson;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.sekwah.voicechat.VoiceChat;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -22,7 +23,6 @@ public class VoiceChatServer {
     private final int port;
     private final VoiceChatTokenStore tokens;
     private final VoiceChatRoom room;
-    private final HytaleLogger logger;
     private final boolean devForwardingEnabled;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Gson gson = new Gson();
@@ -31,11 +31,10 @@ public class VoiceChatServer {
     private EventLoopGroup workerGroup;
     private Channel channel;
 
-    public VoiceChatServer(int port, VoiceChatTokenStore tokens, VoiceChatRoom room, HytaleLogger logger, boolean devForwardingEnabled) {
+    public VoiceChatServer(int port, VoiceChatTokenStore tokens, VoiceChatRoom room, boolean devForwardingEnabled) {
         this.port = port;
         this.tokens = tokens;
         this.room = room;
-        this.logger = logger;
         this.devForwardingEnabled = devForwardingEnabled;
     }
 
@@ -76,7 +75,7 @@ public class VoiceChatServer {
                             ch.pipeline().addLast(new ChunkedWriteHandler());
                             ch.pipeline().addLast(new VoiceChatHttpHandler(devForwardingEnabled));
                             ch.pipeline().addLast(new WebSocketServerProtocolHandler("/voice/ws", null, true));
-                            ch.pipeline().addLast(new VoiceChatWebSocketHandler(room, tokens, logger, gson));
+                            ch.pipeline().addLast(new VoiceChatWebSocketHandler(room, tokens, gson));
                         }
                     })
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
@@ -86,12 +85,12 @@ public class VoiceChatServer {
                 attempts++;
                 try {
                     channel = bootstrap.bind(port).syncUninterruptibly().channel();
-                    logger.atInfo().log("Server listening on port %s", port);
+                    VoiceChat.LOGGER.atInfo().log("Server listening on port %s", port);
                     channel.closeFuture().syncUninterruptibly();
                     break;
                 } catch (Exception e) {
                     if (isBindException(e)) {
-                        logger.atWarning().withCause(e).log("Voice chat bind failed on port %s (attempt %s/5), retrying in 1s.", port, attempts);
+                        VoiceChat.LOGGER.atWarning().withCause(e).log("Voice chat bind failed on port %s (attempt %s/5), retrying in 1s.", port, attempts);
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException interrupted) {
@@ -104,7 +103,7 @@ public class VoiceChatServer {
                 }
             }
         } catch (Exception e) {
-            logger.atSevere().withCause(e).log("Voice chat server failed to start.");
+            VoiceChat.LOGGER.atSevere().withCause(e).log("Voice chat server failed to start.");
         } finally {
             stop();
         }
