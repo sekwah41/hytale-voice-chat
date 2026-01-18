@@ -96,9 +96,10 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             return;
         }
 
-        VoiceChat.LOGGER.atInfo().log("Voice chat client connected.");
-
         String id = UUID.randomUUID().toString().replace("-", "");
+        String userName = tokens.getUserName(userId);
+        String nameLabel = (userName == null || userName.isBlank()) ? "Unknown" : userName;
+        VoiceChat.LOGGER.atInfo().log("Voice chat client connected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id);
         ctx.channel().attr(CLIENT_ID).set(id);
         ctx.channel().attr(AUTHENTICATED).set(true);
         ctx.channel().attr(CLIENT_USER_ID).set(userId);
