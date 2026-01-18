@@ -18,6 +18,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
 
     private static final AttributeKey<String> CLIENT_ID = AttributeKey.valueOf("voicechat_client_id");
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("voicechat_authenticated");
+    private static final AttributeKey<UUID> CLIENT_USER_ID = AttributeKey.valueOf("voicechat_user_id");
 
     private final VoiceChatRoom room;
     private final VoiceChatTokenStore tokens;
@@ -85,8 +86,13 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
 
     private void handleHello(ChannelHandlerContext ctx, JsonObject payload) {
         String token = getString(payload, "token");
-        if (!tokens.consumeToken(token)) {
+        UUID userId = tokens.consumeTokenForUser(token);
+        if (userId == null) {
             sendError(ctx, "Invalid or expired token. Please re-run /voice chat command.");
+            return;
+        }
+        if (room.isUserConnected(userId)) {
+            sendError(ctx, "Voice chat already connected for this user.");
             return;
         }
 
@@ -95,8 +101,9 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         String id = UUID.randomUUID().toString().replace("-", "");
         ctx.channel().attr(CLIENT_ID).set(id);
         ctx.channel().attr(AUTHENTICATED).set(true);
+        ctx.channel().attr(CLIENT_USER_ID).set(userId);
         JsonElement existingPeers = gson.toJsonTree(room.peerIdsSnapshot());
-        room.register(id, ctx.channel());
+        room.register(userId, id, ctx.channel());
 
         JsonObject welcome = new JsonObject();
         welcome.addProperty("type", "welcome");

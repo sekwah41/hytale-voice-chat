@@ -42,7 +42,7 @@ public class VoiceChatCommand extends AbstractAsyncCommand {
                 if (ref != null) {
                     PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
                     if( playerRef != null) {
-                        String link = service.createSessionUrl(playerRef.getUuid());
+                        String link = service.createSessionUrl(playerRef.getUuid(), player.getDisplayName());
                         player.getPageManager().openCustomPage(ref, store, new VoiceChatLinkGui(playerRef, link));
                     }
                 }

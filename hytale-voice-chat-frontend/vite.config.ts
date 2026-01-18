@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react';
 // https://vite.dev/config/
 export default defineConfig({
     base: '/voice/',
+    server: {
+        hmr: {
+            path: '/voice/',
+        },
+    },
     plugins: [
         react({
             babel: {

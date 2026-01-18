@@ -34,9 +34,10 @@ public class VoiceChatService {
         }
     }
 
-    public String createSessionUrl(UUID userId) {
+    public String createSessionUrl(UUID userId, String userName) {
         VoiceChatConfig current = config.get();
         Duration ttl = Duration.ofSeconds(Math.max(30, current.getVoiceChatTokenTtlSeconds()));
+        tokens.registerUser(userId, userName);
         String token = tokens.createToken(userId, ttl);
         return appendToken(publicUrl, token);
     }
@@ -45,23 +46,29 @@ public class VoiceChatService {
         String base = current.getVoiceChatPublicUrl();
         if (base == null || base.isBlank()) {
             if (current.isVoiceChatDevForwardingEnabled()) {
-                base = "https://localhost:5173/";
+                base = "http://localhost:5173/voice/";
             } else {
                 base = "https://localhost";
             }
         }
-        return normalizePublicUrl(base, port);
+        return normalizePublicUrl(base, port, current.isVoiceChatDevForwardingEnabled());
     }
 
-    private String normalizePublicUrl(String baseUrl, int port) {
+    private String normalizePublicUrl(String baseUrl, int port, boolean allowHttp) {
         String normalized = baseUrl;
         if (normalized.startsWith("http://")) {
-            normalized = "https://" + normalized.substring("http://".length());
+            if (!allowHttp) {
+                normalized = "https://" + normalized.substring("http://".length());
+            }
         } else if (!normalized.startsWith("https://")) {
-            normalized = "https://" + normalized;
+            normalized = (allowHttp ? "http://" : "https://") + normalized;
         }
         try {
             java.net.URI uri = java.net.URI.create(normalized);
+            String scheme = uri.getScheme();
+            if (scheme == null) {
+                scheme = allowHttp ? "http" : "https";
+            }
             String host = uri.getHost();
             int targetPort = uri.getPort() == -1 ? port : uri.getPort();
             String path = uri.getPath();
@@ -73,7 +80,7 @@ public class VoiceChatService {
                 path = path + "/";
             }
             java.net.URI rebuilt = new java.net.URI(
-                    "https",
+                    scheme,
                     uri.getUserInfo(),
                     host,
                     targetPort,

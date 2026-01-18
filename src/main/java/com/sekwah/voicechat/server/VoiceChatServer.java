@@ -129,6 +129,9 @@ public class VoiceChatServer {
     }
 
     private SslContext buildSslContext(String hostname) {
+        if (devForwardingEnabled) {
+            return null;
+        }
         try {
             SelfSignedCertificate certificate = new SelfSignedCertificate(hostname);
             return SslContextBuilder.forServer(certificate.certificate(), certificate.privateKey()).build();

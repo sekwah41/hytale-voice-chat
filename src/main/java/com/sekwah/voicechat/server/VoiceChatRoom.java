@@ -8,6 +8,7 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 // For now there is one giant global room for testing purposes.
@@ -15,13 +16,28 @@ import java.util.concurrent.ConcurrentHashMap;
 public class VoiceChatRoom {
 
     private final Map<String, Channel> clients = new ConcurrentHashMap<>();
+    private final Map<UUID, String> clientIdsByUser = new ConcurrentHashMap<>();
+    private final Map<String, UUID> userIdsByClient = new ConcurrentHashMap<>();
 
-    public void register(String id, Channel channel) {
+    public void register(UUID userId, String id, Channel channel) {
         clients.put(id, channel);
+        clientIdsByUser.put(userId, id);
+        userIdsByClient.put(id, userId);
     }
 
     public void remove(String id) {
         clients.remove(id);
+        UUID userId = userIdsByClient.remove(id);
+        if (userId != null) {
+            clientIdsByUser.remove(userId, id);
+        }
+    }
+
+    public boolean isUserConnected(UUID userId) {
+        if (userId == null) {
+            return false;
+        }
+        return clientIdsByUser.containsKey(userId);
     }
 
     public Collection<String> peerIdsSnapshot() {

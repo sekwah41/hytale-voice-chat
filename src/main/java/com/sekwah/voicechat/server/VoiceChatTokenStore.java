@@ -10,7 +10,25 @@ public class VoiceChatTokenStore {
 
     private final Map<String, TokenEntry> tokensByValue = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Long>> tokensByUser = new ConcurrentHashMap<>();
+    private final Map<UUID, String> userNamesById = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
+
+    public void registerUser(UUID userId, String userName) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId must be provided");
+        }
+        if (userName == null || userName.isBlank()) {
+            return;
+        }
+        userNamesById.put(userId, userName);
+    }
+
+    public String getUserName(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userNamesById.get(userId);
+    }
 
     public String createToken(UUID userId, Duration ttl) {
         if (userId == null) {
@@ -36,6 +54,21 @@ public class VoiceChatTokenStore {
         }
         removeTokenForUser(entry.userId, token);
         return entry.expiresAt >= System.currentTimeMillis();
+    }
+
+    public UUID consumeTokenForUser(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        TokenEntry entry = tokensByValue.remove(token);
+        if (entry == null) {
+            return null;
+        }
+        removeTokenForUser(entry.userId, token);
+        if (entry.expiresAt < System.currentTimeMillis()) {
+            return null;
+        }
+        return entry.userId;
     }
 
     private void purgeExpired() {
