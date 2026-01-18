@@ -13,6 +13,9 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.handler.stream.ChunkedWriteHandler;
 
 import java.net.BindException;
@@ -24,6 +27,7 @@ public class VoiceChatServer {
     private final VoiceChatTokenStore tokens;
     private final VoiceChatRoom room;
     private final boolean devForwardingEnabled;
+    private final SslContext sslContext;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Gson gson = new Gson();
 
@@ -31,11 +35,12 @@ public class VoiceChatServer {
     private EventLoopGroup workerGroup;
     private Channel channel;
 
-    public VoiceChatServer(int port, VoiceChatTokenStore tokens, VoiceChatRoom room, boolean devForwardingEnabled) {
+    public VoiceChatServer(int port, String hostname, VoiceChatTokenStore tokens, VoiceChatRoom room, boolean devForwardingEnabled) {
         this.port = port;
         this.tokens = tokens;
         this.room = room;
         this.devForwardingEnabled = devForwardingEnabled;
+        this.sslContext = buildSslContext(hostname);
     }
 
     public void start() {
@@ -70,6 +75,9 @@ public class VoiceChatServer {
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
+                            if (sslContext != null) {
+                                ch.pipeline().addLast(sslContext.newHandler(ch.alloc()));
+                            }
                             ch.pipeline().addLast(new HttpServerCodec());
                             ch.pipeline().addLast(new HttpObjectAggregator(65536));
                             ch.pipeline().addLast(new ChunkedWriteHandler());
@@ -118,5 +126,15 @@ public class VoiceChatServer {
             current = current.getCause();
         }
         return false;
+    }
+
+    private SslContext buildSslContext(String hostname) {
+        try {
+            SelfSignedCertificate certificate = new SelfSignedCertificate(hostname);
+            return SslContextBuilder.forServer(certificate.certificate(), certificate.privateKey()).build();
+        } catch (Exception e) {
+            VoiceChat.LOGGER.atSevere().withCause(e).log("Failed to generate TLS certificate for %s.", hostname);
+            return null;
+        }
     }
 }

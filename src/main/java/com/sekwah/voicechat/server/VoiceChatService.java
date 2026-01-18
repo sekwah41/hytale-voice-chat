@@ -1,6 +1,5 @@
 package com.sekwah.voicechat.server;
 
-import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.util.Config;
 import com.sekwah.voicechat.config.VoiceChatConfig;
 
@@ -23,7 +22,8 @@ public class VoiceChatService {
         VoiceChatConfig current = config.get();
         int port = current.getVoiceChatPort();
         publicUrl = resolvePublicUrl(current, port);
-        server = new VoiceChatServer(port, tokens, room, current.isVoiceChatDevForwardingEnabled());
+        String hostname = resolveHostname(publicUrl);
+        server = new VoiceChatServer(port, hostname, tokens, room, current.isVoiceChatDevForwardingEnabled());
         server.start();
         Runtime.getRuntime().addShutdownHook(new Thread(this::stop, "voicechat-shutdown"));
     }
@@ -45,12 +45,54 @@ public class VoiceChatService {
         String base = current.getVoiceChatPublicUrl();
         if (base == null || base.isBlank()) {
             if (current.isVoiceChatDevForwardingEnabled()) {
-                base = "http://localhost:5173/";
+                base = "https://localhost:5173/";
             } else {
-                base = "http://localhost:" + port + "/voice/";
+                base = "https://localhost";
             }
         }
-        return base;
+        return normalizePublicUrl(base, port);
+    }
+
+    private String normalizePublicUrl(String baseUrl, int port) {
+        String normalized = baseUrl;
+        if (normalized.startsWith("http://")) {
+            normalized = "https://" + normalized.substring("http://".length());
+        } else if (!normalized.startsWith("https://")) {
+            normalized = "https://" + normalized;
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(normalized);
+            String host = uri.getHost();
+            int targetPort = uri.getPort() == -1 ? port : uri.getPort();
+            String path = uri.getPath();
+            if (path == null || path.isBlank() || "/".equals(path)) {
+                path = "/voice/";
+            } else if (!path.startsWith("/voice")) {
+                path = path.endsWith("/") ? path + "voice/" : path + "/voice/";
+            } else if (!path.endsWith("/")) {
+                path = path + "/";
+            }
+            java.net.URI rebuilt = new java.net.URI(
+                    "https",
+                    uri.getUserInfo(),
+                    host,
+                    targetPort,
+                    path,
+                    uri.getQuery(),
+                    uri.getFragment()
+            );
+            return rebuilt.toString();
+        } catch (Exception ignored) {
+            return normalized;
+        }
+    }
+
+    private String resolveHostname(String baseUrl) {
+        try {
+            return java.net.URI.create(baseUrl).getHost();
+        } catch (Exception ignored) {
+            return "localhost";
+        }
     }
 
     private String appendToken(String baseUrl, String token) {

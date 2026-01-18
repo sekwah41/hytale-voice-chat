@@ -1,4 +1,4 @@
-export type PeerEntry = {
+ export type PeerEntry = {
     id: string;
     state: string;
 };
@@ -272,7 +272,7 @@ export class VoiceChatController {
     private connectWebSocket = (token: string) => {
         const params = new URLSearchParams(window.location.search);
         const address = params.get('address') ?? window.location.host;
-        const socketUrl = `ws://${address}/voice/ws`;
+        const socketUrl = `wss://${address}/voice/ws`;
         const ws = new WebSocket(socketUrl);
         this.state.ws = ws;
 
