@@ -17,6 +17,7 @@ type VoiceChatCallbacks = {
     onJoinDisabled: (disabled: boolean) => void;
     onMuteDisabled: (disabled: boolean) => void;
     onMuted: (muted: boolean) => void;
+    onUserName: (name: string) => void;
     onPttActive: (active: boolean) => void;
     onPeerListUpdate: (updater: PeerListUpdater) => void;
 };
@@ -183,10 +184,11 @@ export class VoiceChatController {
         this.sendMessage({ type: 'offer', to: peerId, sdp: pc.localDescription });
     };
 
-    private handleWelcome = (message: { id?: string; peers?: string[] }) => {
+    private handleWelcome = (message: { id?: string; peers?: string[]; userName?: string }) => {
         this.state.id = message.id ?? null;
         this.callbacks.onStatus('Joined. Waiting for peers...');
         this.callbacks.onMuteDisabled(false);
+        this.callbacks.onUserName(message.userName ?? '');
 
         const peers = Array.isArray(message.peers) ? message.peers : [];
         peers.forEach((peerId) => {
@@ -301,7 +303,7 @@ export class VoiceChatController {
 
             switch (message.type) {
                 case 'welcome':
-                    this.handleWelcome(message as { id?: string; peers?: string[] });
+                    this.handleWelcome(message as { id?: string; peers?: string[]; userName?: string });
                     break;
                 case 'peer-join':
                     await this.handlePeerJoin(message as { id?: string });
@@ -361,6 +363,7 @@ export class VoiceChatController {
             this.callbacks.onStatus('Disconnected.');
             this.callbacks.onJoinDisabled(false);
             this.callbacks.onMuteDisabled(true);
+            this.callbacks.onUserName('');
         });
     };
 }

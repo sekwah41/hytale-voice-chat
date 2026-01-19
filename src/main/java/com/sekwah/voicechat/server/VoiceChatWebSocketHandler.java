@@ -99,6 +99,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         String id = UUID.randomUUID().toString().replace("-", "");
         String userName = tokens.getUserName(userId);
         String nameLabel = (userName == null || userName.isBlank()) ? "Unknown" : userName;
+        String clientName = (userName == null || userName.isBlank()) ? "" : userName;
         VoiceChat.LOGGER.atInfo().log("Voice chat client connected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id);
         ctx.channel().attr(CLIENT_ID).set(id);
         ctx.channel().attr(AUTHENTICATED).set(true);
@@ -109,6 +110,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         JsonObject welcome = new JsonObject();
         welcome.addProperty("type", "welcome");
         welcome.addProperty("id", id);
+        welcome.addProperty("userName", clientName);
         welcome.add("peers", existingPeers);
         ctx.channel().writeAndFlush(new TextWebSocketFrame(welcome.toString()));
 

@@ -11,6 +11,7 @@ function Panel() {
     const [joinDisabled, setJoinDisabled] = useState(false);
     const [muteDisabled, setMuteDisabled] = useState(true);
     const [muted, setMuted] = useState(false);
+    const [userName, setUserName] = useState('');
     const [, setPttActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
@@ -22,6 +23,7 @@ function Panel() {
             onJoinDisabled: setJoinDisabled,
             onMuteDisabled: setMuteDisabled,
             onMuted: setMuted,
+            onUserName: setUserName,
             onPttActive: setPttActive,
             onPeerListUpdate: setPeerList,
         });
@@ -116,6 +118,10 @@ function Panel() {
                 </section>
                 <section className="panel">
                     <h2>Diagnostics</h2>
+                    <div className="stat">
+                        <span>User</span>
+                        {userName ? <span className="statValue">{userName}</span> : <span className="statValue statAwaitingValue">Not Set</span>}
+                    </div>
                     <div className="stat">
                         <span>Token</span>
                         <span className="statValue">{token ? 'Loaded' : 'Missing'}</span>
