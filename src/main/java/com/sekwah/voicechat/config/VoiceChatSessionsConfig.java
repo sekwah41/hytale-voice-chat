@@ -16,13 +16,32 @@ public class VoiceChatSessionsConfig {
 
     public static final BuilderCodec CODEC = BuilderCodec.builder(VoiceChatSessionsConfig.class, VoiceChatSessionsConfig::new)
             .append(new KeyedCodec<>("SessionTokens", SESSION_TOKENS_CODEC),
-                    (config, value) -> config.sessionTokens = new HashMap<>(value),
+                    (config, value) -> {
+                        config.sessionTokens = new HashMap<>(value);
+                        config.sessionTokenToUserUUID = new HashMap<>();
+                        for (Map.Entry<UUID, String> entry : value.entrySet()) {
+                            config.sessionTokenToUserUUID.put(entry.getValue(), entry.getKey());
+                        }
+                    },
                     (config) -> config.sessionTokens).add()
             .build();
 
     private Map<UUID, String> sessionTokens = new HashMap<>();
+    private Map<String, UUID> sessionTokenToUserUUID = new HashMap<>();
 
     public String getSessionToken(UUID uuid) {
         return sessionTokens.get(uuid);
+    }
+
+    public UUID getUserUUIDFromToken(String token) {
+        return this.sessionTokenToUserUUID.get(token);
+    }
+
+    public void setSessionToken(UUID uuid, String token) {
+        String existingToken = sessionTokens.put(uuid, token);
+        if (existingToken != null) {
+            sessionTokenToUserUUID.remove(existingToken);
+        }
+        sessionTokenToUserUUID.put(token, uuid);
     }
 }

@@ -1,5 +1,8 @@
 package com.sekwah.voicechat.server;
 
+import com.hypixel.hytale.server.core.util.Config;
+import com.sekwah.voicechat.config.VoiceChatSessionsConfig;
+
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Map;
@@ -11,6 +14,11 @@ public class VoiceChatTokenStore {
     private final Map<String, TokenEntry> tokensByValue = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Long>> tokensByUser = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
+    private final Config<VoiceChatSessionsConfig> sessionConfig;
+
+    public VoiceChatTokenStore(Config<VoiceChatSessionsConfig> sessionConfig) {
+        this.sessionConfig = sessionConfig;
+    }
 
     public void registerUser(UUID userId) {
         if (userId == null) {
@@ -32,31 +40,24 @@ public class VoiceChatTokenStore {
         return token;
     }
 
-    public boolean consumeToken(String token) {
-        if (token == null || token.isBlank()) {
-            return false;
-        }
-        TokenEntry entry = tokensByValue.remove(token);
-        if (entry == null) {
-            return false;
-        }
-        removeTokenForUser(entry.userId, token);
-        return entry.expiresAt >= System.currentTimeMillis();
-    }
-
     public UUID consumeTokenForUser(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
         TokenEntry entry = tokensByValue.remove(token);
-        if (entry == null) {
-            return null;
+        if (entry != null) {
+            removeTokenForUser(entry.userId, token);
+            if (entry.expiresAt < System.currentTimeMillis()) {
+                return null;
+            }
+
+            var voiceChatConfig = this.sessionConfig.get();
+            voiceChatConfig.setSessionToken(entry.userId, token);
+            this.sessionConfig.save();
+            return entry.userId;
         }
-        removeTokenForUser(entry.userId, token);
-        if (entry.expiresAt < System.currentTimeMillis()) {
-            return null;
-        }
-        return entry.userId;
+
+        return this.sessionConfig.get().getUserUUIDFromToken(token);
     }
 
     private void purgeExpired() {

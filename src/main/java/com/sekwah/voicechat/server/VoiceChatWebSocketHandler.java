@@ -5,10 +5,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.protocol.SoundCategory;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.sekwah.voicechat.VoiceChat;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -78,6 +80,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         String id = ctx.channel().attr(CLIENT_ID).get();
+        UUID userId = ctx.channel().attr(CLIENT_USER_ID).get();
         if (id != null) {
             room.remove(id);
             JsonObject leave = new JsonObject();
@@ -85,7 +88,19 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             leave.addProperty("id", id);
             room.broadcast(leave, id);
         }
-        VoiceChat.LOGGER.atInfo().log("Voice chat client disconnected.");
+        String nameLabel = "Unknown";
+        if (userId != null) {
+            PlayerRef playerRef = Universe.get().getPlayer(userId);
+            if (playerRef != null) {
+                String userName = playerRef.getUsername();
+                if (userName != null && !userName.isBlank()) {
+                    nameLabel = userName;
+                }
+            }
+        }
+        VoiceChat.LOGGER.atInfo().log(
+            "Voice chat client disconnected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id
+        );
     }
 
     private void handleHello(ChannelHandlerContext ctx, JsonObject payload) {
@@ -129,6 +144,20 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         room.broadcast(join, id);
 
         playerRef.sendMessage(Message.translation("commands.success.voicechat.connected").color(Color.GREEN));
+        int soundIndex = SoundEvent.getAssetMap().getIndex("SFX_Capture_Crate_spawn_Succeed");
+        if(soundIndex != -1) {
+            var worldUuid = playerRef.getWorldUuid();
+            if(worldUuid == null) {
+                return;
+            }
+            var world = Universe.get().getWorld(worldUuid);
+
+            if(world == null) {
+                return;
+            }
+
+            SoundUtil.playSoundEvent2dToPlayer(playerRef, soundIndex, SoundCategory.UI);
+        }
     }
 
     private void forwardSignal(ChannelHandlerContext ctx, JsonObject payload, String type) {

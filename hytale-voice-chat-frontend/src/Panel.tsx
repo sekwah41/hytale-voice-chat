@@ -16,10 +16,22 @@ function Panel() {
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
     if (!controllerRef.current) {
+        const logStatus = (label: string, value: string) => {
+            console.log(`[voicechat] ${label}: ${value}`);
+        };
         controllerRef.current = new VoiceChatController({
-            onStatus: setStatusText,
-            onConnectionStatus: setConnectionStatus,
-            onMicStatus: setMicStatus,
+            onStatus: (text) => {
+                logStatus('status', text);
+                setStatusText(text);
+            },
+            onConnectionStatus: (text) => {
+                logStatus('connection', text);
+                setConnectionStatus(text);
+            },
+            onMicStatus: (text) => {
+                logStatus('mic', text);
+                setMicStatus(text);
+            },
             onJoinDisabled: setJoinDisabled,
             onMuteDisabled: setMuteDisabled,
             onMuted: setMuted,

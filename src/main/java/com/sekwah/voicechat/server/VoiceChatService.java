@@ -2,6 +2,7 @@ package com.sekwah.voicechat.server;
 
 import com.hypixel.hytale.server.core.util.Config;
 import com.sekwah.voicechat.config.VoiceChatConfig;
+import com.sekwah.voicechat.config.VoiceChatSessionsConfig;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -9,13 +10,17 @@ import java.util.UUID;
 public class VoiceChatService {
 
     private final Config<VoiceChatConfig> config;
-    private final VoiceChatTokenStore tokens = new VoiceChatTokenStore();
+    private final VoiceChatTokenStore tokens;
     private final VoiceChatRoom room = new VoiceChatRoom();
+    private final Config<VoiceChatSessionsConfig> sessionsConfig;
+
     private VoiceChatServer server;
     private String publicUrl;
 
-    public VoiceChatService(Config<VoiceChatConfig> config) {
+    public VoiceChatService(Config<VoiceChatConfig> config, Config<VoiceChatSessionsConfig> sessionsConfig) {
         this.config = config;
+        this.sessionsConfig = sessionsConfig;
+        this.tokens = new VoiceChatTokenStore(this.sessionsConfig);
     }
 
     public void start() {

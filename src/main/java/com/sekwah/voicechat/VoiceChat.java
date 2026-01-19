@@ -32,7 +32,7 @@ public class VoiceChat extends JavaPlugin {
         super.setup();
         CONFIG.save();
         SESSIONS_CONFIG.save();
-        this.service = new VoiceChatService(CONFIG);
+        this.service = new VoiceChatService(CONFIG, SESSIONS_CONFIG);
         this.service.start();
         this.getCommandRegistry().registerCommand(new VoiceChatCommand(this.service));
     }

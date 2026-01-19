@@ -289,7 +289,7 @@ export class VoiceChatController {
 
         ws.addEventListener('open', () => {
             this.callbacks.onConnectionStatus('Online');
-            this.callbacks.onStatus('Connected. Joining voice...');
+            this.callbacks.onStatus('Connected.');
             this.sendMessage({ type: 'hello', token });
         });
 

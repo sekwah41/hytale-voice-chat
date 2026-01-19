@@ -1,4 +1,3 @@
 errors.voicechat.notLinked = You need to link your browser to your voice chat first. Use /voice link to get started.
 voicechat.link = Voice chat link:
 success.voicechat.connected = You have successfully connected to the voice chat.
-t
