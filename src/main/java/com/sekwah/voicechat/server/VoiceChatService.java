@@ -34,10 +34,10 @@ public class VoiceChatService {
         }
     }
 
-    public String createSessionUrl(UUID userId, String userName) {
+    public String createSessionUrl(UUID userId) {
         VoiceChatConfig current = config.get();
         Duration ttl = Duration.ofSeconds(Math.max(30, current.getVoiceChatTokenTtlSeconds()));
-        tokens.registerUser(userId, userName);
+        tokens.registerUser(userId);
         String token = tokens.createToken(userId, ttl);
         return appendToken(publicUrl, token);
     }

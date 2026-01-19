@@ -10,24 +10,12 @@ public class VoiceChatTokenStore {
 
     private final Map<String, TokenEntry> tokensByValue = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Long>> tokensByUser = new ConcurrentHashMap<>();
-    private final Map<UUID, String> userNamesById = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
-    public void registerUser(UUID userId, String userName) {
+    public void registerUser(UUID userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId must be provided");
         }
-        if (userName == null || userName.isBlank()) {
-            return;
-        }
-        userNamesById.put(userId, userName);
-    }
-
-    public String getUserName(UUID userId) {
-        if (userId == null) {
-            return null;
-        }
-        return userNamesById.get(userId);
     }
 
     public String createToken(UUID userId, Duration ttl) {

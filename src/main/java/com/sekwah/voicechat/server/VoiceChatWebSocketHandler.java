@@ -6,12 +6,16 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.Universe;
 import com.sekwah.voicechat.VoiceChat;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.util.AttributeKey;
 
+import java.awt.*;
 import java.util.UUID;
 
 public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
@@ -97,7 +101,12 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         }
 
         String id = UUID.randomUUID().toString().replace("-", "");
-        String userName = tokens.getUserName(userId);
+        PlayerRef playerRef = Universe.get().getPlayer(userId);
+        if(playerRef == null) {
+            sendError(ctx, "User not found in universe. Please ensure you are connected to the server.");
+            return;
+        }
+        String userName = playerRef.getUsername();
         String nameLabel = (userName == null || userName.isBlank()) ? "Unknown" : userName;
         String clientName = (userName == null || userName.isBlank()) ? "" : userName;
         VoiceChat.LOGGER.atInfo().log("Voice chat client connected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id);
@@ -118,6 +127,8 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         join.addProperty("type", "peer-join");
         join.addProperty("id", id);
         room.broadcast(join, id);
+
+        playerRef.sendMessage(Message.translation("commands.success.voicechat.connected").color(Color.GREEN));
     }
 
     private void forwardSignal(ChannelHandlerContext ctx, JsonObject payload, String type) {
