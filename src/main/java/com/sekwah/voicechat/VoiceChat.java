@@ -1,6 +1,9 @@
 package com.sekwah.voicechat;
 
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.protocol.packets.interface_.RemoveFromServerPlayerList;
+import com.hypixel.hytale.server.core.event.events.player.AddPlayerToWorldEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.util.Config;
@@ -35,6 +38,11 @@ public class VoiceChat extends JavaPlugin {
         this.service = new VoiceChatService(CONFIG, SESSIONS_CONFIG);
         this.service.start();
         this.getCommandRegistry().registerCommand(new VoiceChatCommand(this.service));
+
+        this.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, event -> {
+            var playerUuid = event.getPlayerRef().getUuid();
+            this.service.playerDisconnected(playerUuid);
+        });
     }
 
     @Override

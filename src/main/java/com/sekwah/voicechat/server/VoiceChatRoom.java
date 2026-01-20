@@ -40,6 +40,23 @@ public class VoiceChatRoom {
         return clientIdsByUser.containsKey(userId);
     }
 
+    public boolean disconnectUser(UUID userId) {
+        if (userId == null) {
+            return false;
+        }
+        String clientId = clientIdsByUser.get(userId);
+        if (clientId == null) {
+            return false;
+        }
+        Channel channel = clients.get(clientId);
+        if (channel != null) {
+            channel.close();
+        } else {
+            remove(clientId);
+        }
+        return true;
+    }
+
     public Collection<String> peerIdsSnapshot() {
         return new ArrayList<>(clients.keySet());
     }

@@ -113,4 +113,8 @@ public class VoiceChatService {
         }
         return baseUrl + "?token=" + token;
     }
+
+    public void playerDisconnected(UUID playerUuid) {
+        room.disconnectUser(playerUuid);
+    }
 }
