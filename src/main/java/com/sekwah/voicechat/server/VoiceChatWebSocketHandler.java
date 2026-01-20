@@ -5,13 +5,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import com.hypixel.hytale.protocol.SoundCategory;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
-import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.sekwah.voicechat.VoiceChat;
+import com.sekwah.voicechat.util.VoiceChatSoundUtil;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
@@ -101,6 +99,10 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         VoiceChat.LOGGER.atInfo().log(
             "Voice chat client disconnected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id
         );
+        if (userId != null) {
+            PlayerRef playerRef = Universe.get().getPlayer(userId);
+            VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Clay_Pot_Small_Break");
+        }
     }
 
     private void handleHello(ChannelHandlerContext ctx, JsonObject payload) {
@@ -144,20 +146,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         room.broadcast(join, id);
 
         playerRef.sendMessage(Message.translation("commands.success.voicechat.connected").color(Color.GREEN));
-        int soundIndex = SoundEvent.getAssetMap().getIndex("SFX_Capture_Crate_spawn_Succeed");
-        if(soundIndex != -1) {
-            var worldUuid = playerRef.getWorldUuid();
-            if(worldUuid == null) {
-                return;
-            }
-            var world = Universe.get().getWorld(worldUuid);
-
-            if(world == null) {
-                return;
-            }
-
-            SoundUtil.playSoundEvent2dToPlayer(playerRef, soundIndex, SoundCategory.UI);
-        }
+        VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Capture_Crate_spawn_Succeed");
     }
 
     private void forwardSignal(ChannelHandlerContext ctx, JsonObject payload, String type) {
