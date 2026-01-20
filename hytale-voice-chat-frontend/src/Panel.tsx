@@ -15,6 +15,7 @@ function Panel() {
     const [, setPttActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
+    const autoStartedRef = useRef(false);
     if (!controllerRef.current) {
         const logStatus = (label: string, value: string) => {
             console.log(`[voicechat] ${label}: ${value}`);
@@ -64,6 +65,28 @@ function Panel() {
             // Ignore storage failures (private mode, storage blocked).
         }
     }, []);
+
+    useEffect(() => {
+        if (!token || autoStartedRef.current) {
+            return;
+        }
+        let cancelled = false;
+        navigator.permissions
+            .query({ name: 'microphone' as PermissionName })
+            .then((result) => {
+                if (cancelled || result.state !== 'granted') {
+                    return;
+                }
+                autoStartedRef.current = true;
+                controllerRef.current?.startVoice(token);
+            })
+            .catch(() => {
+                // Ignore permission API failures.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [token]);
 
     useEffect(
         () => () => {
