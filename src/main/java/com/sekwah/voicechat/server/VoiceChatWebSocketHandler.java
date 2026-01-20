@@ -114,8 +114,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             return;
         }
         if (room.isUserConnected(userId)) {
-            sendError(ctx, "Voice chat already connected for this user.");
-            return;
+            room.disconnectUser(userId);
         }
 
         String id = UUID.randomUUID().toString().replace("-", "");
