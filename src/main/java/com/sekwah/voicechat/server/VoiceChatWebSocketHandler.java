@@ -101,6 +101,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         );
         if (userId != null) {
             PlayerRef playerRef = Universe.get().getPlayer(userId);
+            playerRef.sendMessage(Message.translation("commands.success.voicechat.disconnected").color(Color.RED));
             VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Clay_Pot_Small_Break");
         }
     }
