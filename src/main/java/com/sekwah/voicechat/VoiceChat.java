@@ -1,15 +1,18 @@
 package com.sekwah.voicechat;
 
+import com.hypixel.hytale.component.ComponentType;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.util.Config;
 import com.sekwah.voicechat.commands.VoiceChatCommand;
 import com.sekwah.voicechat.config.VoiceChatConfig;
 import com.sekwah.voicechat.config.VoiceChatSessionsConfig;
 import com.sekwah.voicechat.server.VoiceChatService;
 import com.sekwah.voicechat.systems.VoicePositionSystem;
+import com.sekwah.voicechat.systems.components.VoiceChatComponent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +24,7 @@ public class VoiceChat extends JavaPlugin {
 
     public static final HytaleLogger LOGGER = HytaleLogger.forEnclosingClass();
     private VoiceChatService service;
+    private ComponentType<EntityStore, VoiceChatComponent> voiceChatComponentType;
 
     public VoiceChat(JavaPluginInit init) {
         super(init);
@@ -43,12 +47,17 @@ public class VoiceChat extends JavaPlugin {
             this.service.playerDisconnected(playerUuid);
         });
 
-        this.getEntityStoreRegistry().registerSystem(new VoicePositionSystem());
+        this.voiceChatComponentType = this.getEntityStoreRegistry().registerComponent(VoiceChatComponent.class, VoiceChatComponent::new);
+        this.getEntityStoreRegistry().registerSystem(new VoicePositionSystem(this.voiceChatComponentType));
     }
 
     @Override
     public @Nullable CompletableFuture<Void> preLoad() {
         return super.preLoad();
+    }
+
+    public ComponentType<EntityStore, VoiceChatComponent> getPoisonComponentType() {
+        return this.voiceChatComponentType;
     }
 
     @Override
