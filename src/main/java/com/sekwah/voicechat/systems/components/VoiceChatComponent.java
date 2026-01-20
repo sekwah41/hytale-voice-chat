@@ -9,7 +9,8 @@ public class VoiceChatComponent implements Component<EntityStore> {
 
     public Vector3d lastSentPosition;
 
-    // For now will send at a hardcoded interval.
+    // Will broadcast its locations to other players at a set interval
+    // Though players will be updated about their rotation data more frequently
     public float timeSinceLastUpdate;
 
     public VoiceChatComponent(VoiceChatComponent voiceChatComponent) {

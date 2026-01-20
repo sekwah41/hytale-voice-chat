@@ -48,6 +48,7 @@ public class VoiceChat extends JavaPlugin {
         });
 
         this.voiceChatComponentType = this.getEntityStoreRegistry().registerComponent(VoiceChatComponent.class, VoiceChatComponent::new);
+
         this.getEntityStoreRegistry().registerSystem(new VoicePositionSystem(this.voiceChatComponentType));
     }
 
