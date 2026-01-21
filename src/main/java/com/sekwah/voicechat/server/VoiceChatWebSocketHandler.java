@@ -120,7 +120,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         String id = UUID.randomUUID().toString().replace("-", "");
         PlayerRef playerRef = Universe.get().getPlayer(userId);
         if(playerRef == null) {
-            sendError(ctx, "User not found in universe. Please ensure you are connected to the server.");
+            sendError(ctx, "User not found in universe. Please ensure you are connected to the server. This may take a few mins in some cases.");
             return;
         }
         String userName = playerRef.getUsername();

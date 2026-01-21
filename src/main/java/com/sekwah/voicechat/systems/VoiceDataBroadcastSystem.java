@@ -43,36 +43,36 @@ public class VoiceDataBroadcastSystem extends TickingSystem<EntityStore> {
             }
             UUID userId = player.getUuid();
             if (!room.isUserConnected(userId)) {
-                voiceChatComponent.lastSentPosition = null;
-                voiceChatComponent.lastSentRotation = null;
                 voiceChatComponent.markPositionDirty = false;
                 voiceChatComponent.markRotationDirty = false;
                 store.putComponent(ref, this.voiceChatComponentType, voiceChatComponent);
                 continue;
             }
+            String clientId = room.getClientId(userId);
+            if (clientId == null) {
+                continue;
+            }
 
             boolean shouldSendPosition = voiceChatComponent.markPositionDirty
-                    || (voiceChatComponent.lastSentPosition == null && voiceChatComponent.currentPosition != null);
-            if (shouldSendPosition && voiceChatComponent.currentPosition != null) {
+                    && voiceChatComponent.currentPosition != null;
+            if (shouldSendPosition) {
                 JsonObject message = new JsonObject();
                 message.addProperty("type", "position");
+                message.addProperty("id", clientId);
                 message.add("position", GSON.toJsonTree(voiceChatComponent.currentPosition));
-                if (room.sendToUser(userId, message)) {
-                    voiceChatComponent.lastSentPosition = voiceChatComponent.currentPosition.clone();
-                    voiceChatComponent.markPositionDirty = false;
-                }
+                room.broadcast(message, null);
+                voiceChatComponent.markPositionDirty = false;
             }
 
             boolean shouldSendRotation = voiceChatComponent.markRotationDirty
-                    || (voiceChatComponent.lastSentRotation == null && voiceChatComponent.currentRotation != null);
-            if (shouldSendRotation && voiceChatComponent.currentRotation != null) {
+                    && voiceChatComponent.currentRotation != null;
+            if (shouldSendRotation) {
                 JsonObject message = new JsonObject();
                 message.addProperty("type", "rotation");
+                message.addProperty("id", clientId);
                 message.add("rotation", GSON.toJsonTree(voiceChatComponent.currentRotation));
-                if (room.sendToUser(userId, message)) {
-                    voiceChatComponent.lastSentRotation = voiceChatComponent.currentRotation.clone();
-                    voiceChatComponent.markRotationDirty = false;
-                }
+                room.broadcast(message, null);
+                voiceChatComponent.markRotationDirty = false;
             }
 
             store.putComponent(ref, this.voiceChatComponentType, voiceChatComponent);

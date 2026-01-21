@@ -12,6 +12,7 @@ function Panel() {
     const [muteDisabled, setMuteDisabled] = useState(true);
     const [muted, setMuted] = useState(false);
     const [userName, setUserName] = useState('');
+    const [peerId, setPeerId] = useState('');
     const [, setPttActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
@@ -36,6 +37,7 @@ function Panel() {
             onJoinDisabled: setJoinDisabled,
             onMuteDisabled: setMuteDisabled,
             onMuted: setMuted,
+            onPeerId: setPeerId,
             onUserName: setUserName,
             onPttActive: setPttActive,
             onPeerListUpdate: setPeerList,
@@ -156,6 +158,10 @@ function Panel() {
                     <div className="stat">
                         <span>User</span>
                         {userName ? <span className="statValue">{userName}</span> : <span className="statValue statAwaitingValue">Not Set</span>}
+                    </div>
+                    <div className="stat">
+                        <span>Peer ID</span>
+                        {peerId ? <span className="statValue">{peerId.slice(0, 8)}</span> : <span className="statValue statAwaitingValue">Not Set</span>}
                     </div>
                     <div className="stat">
                         <span>Token</span>

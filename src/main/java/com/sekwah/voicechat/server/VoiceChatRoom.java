@@ -81,6 +81,13 @@ public class VoiceChatRoom {
         return sendTo(clientId, message);
     }
 
+    public String getClientId(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return clientIdsByUser.get(userId);
+    }
+
     public void broadcast(JsonObject message, String excludeId) {
         String payload = message.toString();
         for (Map.Entry<String, Channel> entry : clients.entrySet()) {

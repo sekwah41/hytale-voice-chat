@@ -17,6 +17,7 @@ type VoiceChatCallbacks = {
     onJoinDisabled: (disabled: boolean) => void;
     onMuteDisabled: (disabled: boolean) => void;
     onMuted: (muted: boolean) => void;
+    onPeerId: (id: string) => void;
     onUserName: (name: string) => void;
     onPttActive: (active: boolean) => void;
     onPeerListUpdate: (updater: PeerListUpdater) => void;
@@ -194,6 +195,7 @@ export class VoiceChatController {
 
     private handleWelcome = (message: { id?: string; peers?: string[]; userName?: string }) => {
         this.state.id = message.id ?? null;
+        this.callbacks.onPeerId(this.state.id ?? '');
         this.callbacks.onStatus('Joined. Waiting for peers...');
         this.callbacks.onMuteDisabled(false);
         this.callbacks.onUserName(message.userName ?? '');
@@ -279,16 +281,24 @@ export class VoiceChatController {
         }
     };
 
-    private handlePosition = (message: { position?: Vector3 }) => {
+    private handlePosition = (message: { id?: string; position?: Vector3 }) => {
         if (!message.position) {
+            return;
+        }
+        if (message.id && this.state.id && message.id !== this.state.id) {
+            console.debug('[voicechat] peer position update', message.id, message.position);
             return;
         }
         this.state.position = message.position;
         console.debug('[voicechat] position update', message.position);
     };
 
-    private handleRotation = (message: { rotation?: Vector3 }) => {
+    private handleRotation = (message: { id?: string; rotation?: Vector3 }) => {
         if (!message.rotation) {
+            return;
+        }
+        if (message.id && this.state.id && message.id !== this.state.id) {
+            console.debug('[voicechat] peer rotation update', message.id, message.rotation);
             return;
         }
         this.state.rotation = message.rotation;
@@ -374,10 +384,10 @@ export class VoiceChatController {
                     break;
                 }
                 case 'position':
-                    this.handlePosition(message as { position?: Vector3 });
+                    this.handlePosition(message as { id?: string; position?: Vector3 });
                     break;
                 case 'rotation':
-                    this.handleRotation(message as { rotation?: Vector3 });
+                    this.handleRotation(message as { id?: string; rotation?: Vector3 });
                     break;
                 case 'error':
                     this.handleError(
