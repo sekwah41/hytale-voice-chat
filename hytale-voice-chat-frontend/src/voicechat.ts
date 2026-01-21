@@ -82,6 +82,17 @@ export class VoiceChatController {
     };
     private audioFilters: AudioFilter[] = [
         {
+            id: 'stereo-pan',
+            create: (context) => new StereoPannerNode(context, { pan: 0 }),
+            update: (node, peerId, peerData, selfPosition, config) => {
+                if (!(node instanceof StereoPannerNode)) {
+                    return;
+                }
+                const panValue = this.calculateStereoPan(peerId, peerData, selfPosition, config);
+                this.smoothParam(node.pan, panValue);
+            },
+        },
+        {
             id: 'distance-gain',
             create: (context) => context.createGain(),
             update: (node, peerId, peerData, selfPosition, config) => {
@@ -89,7 +100,7 @@ export class VoiceChatController {
                     return;
                 }
                 const gainValue = this.calculateDistanceGain(peerId, peerData, selfPosition, config);
-                node.gain.value = gainValue;
+                this.smoothParam(node.gain, gainValue);
                 console.debug('[voicechat] gain update', peerId, gainValue);
             },
         },
@@ -514,6 +525,49 @@ export class VoiceChatController {
         }
         const fade = (distance - fullVolumeRange) / fallOffRange;
         return Math.max(0, Math.min(1, 1 - fade));
+    };
+
+    private calculateStereoPan = (
+        peerId: string,
+        peerData: PeerData | undefined,
+        selfPosition: Vector3 | null,
+        _config: VoiceChatConfig | null,
+    ) => {
+        if (!peerData?.position || !selfPosition || peerId === this.state.id) {
+            return 0;
+        }
+        const selfYaw = this.state.rotation?.y;
+        if (selfYaw == null) {
+            return 0;
+        }
+        const dx = peerData.position.x - selfPosition.x;
+        const dz = peerData.position.z - selfPosition.z;
+        const angleToPeer = Math.atan2(dx, dz);
+        const relativeYaw = this.normalizeAngle(angleToPeer - selfYaw);
+        const pan = Math.sin(relativeYaw);
+        const clamped = Math.max(-1, Math.min(1, pan));
+        return clamped * 0.8;
+    };
+
+    private smoothParam = (param: AudioParam, value: number) => {
+        const context = this.state.audioContext;
+        if (!context) {
+            param.value = value;
+            return;
+        }
+        const now = context.currentTime;
+        param.setTargetAtTime(value, now, 0.05);
+    };
+
+    private normalizeAngle = (angle: number) => {
+        let result = angle;
+        while (result > Math.PI) {
+            result -= Math.PI * 2;
+        }
+        while (result < -Math.PI) {
+            result += Math.PI * 2;
+        }
+        return result;
     };
 
     private connectWebSocket = (token: string) => {

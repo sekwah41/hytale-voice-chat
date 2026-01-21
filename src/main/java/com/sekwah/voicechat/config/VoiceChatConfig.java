@@ -42,8 +42,8 @@ public class VoiceChatConfig {
     private int PeerUpdatesPerSecond = 10;
     private int AudioEffectUpdatesPerSecond = 4;
     private boolean VoiceChatDevForwardingEnabled = false;
-    private double FullVolumeRange = 12.0;
-    private double FallOffRange = 16.0;
+    private double FullVolumeRange = 20.0;
+    private double FallOffRange = 20.0;
     private double AdditionalPeerConnectionRange = 8.0;
 
     public int getVoiceChatPort() {
