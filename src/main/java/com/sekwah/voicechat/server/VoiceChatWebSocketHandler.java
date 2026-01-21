@@ -137,6 +137,12 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         welcome.addProperty("type", "welcome");
         welcome.addProperty("id", id);
         welcome.addProperty("userName", clientName);
+        var config = VoiceChat.CONFIG.get();
+        JsonObject configPayload = new JsonObject();
+        configPayload.addProperty("fullVolumeRange", config.getFullVolumeRange());
+        configPayload.addProperty("fallOffRange", config.getFallOffRange());
+        configPayload.addProperty("additionalPeerConnectionRange", config.getAdditionalPeerConnectionRange());
+        welcome.add("config", configPayload);
         welcome.add("peers", existingPeers);
         ctx.channel().writeAndFlush(new TextWebSocketFrame(welcome.toString()));
 

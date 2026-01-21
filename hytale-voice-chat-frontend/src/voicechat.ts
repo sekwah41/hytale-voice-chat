@@ -29,6 +29,19 @@ type Vector3 = {
     z: number;
 };
 
+type PeerData = {
+    position: Vector3 | null;
+    rotation: Vector3 | null;
+    // This will be for future tracking
+    filters: Record<string, unknown>;
+};
+
+type VoiceChatConfig = {
+    fullVolumeRange: number;
+    fallOffRange: number;
+    additionalPeerConnectionRange: number;
+};
+
 const normalizeError = (error: unknown) =>
     error instanceof Error ? error : new Error('Voice chat error.');
 
@@ -39,11 +52,13 @@ export class VoiceChatController {
         id: null as string | null,
         localStream: null as MediaStream | null,
         peers: new Map<string, PeerConnectionEntry>(),
+        peerData: new Map<string, PeerData>(),
         muted: false,
         pttEnabled: false,
         pttActive: false,
         position: null as Vector3 | null,
         rotation: null as Vector3 | null,
+        config: null as VoiceChatConfig | null,
     };
 
     constructor(callbacks: VoiceChatCallbacks) {
@@ -193,12 +208,18 @@ export class VoiceChatController {
         this.sendMessage({ type: 'offer', to: peerId, sdp: pc.localDescription });
     };
 
-    private handleWelcome = (message: { id?: string; peers?: string[]; userName?: string }) => {
+    private handleWelcome = (message: {
+        id?: string;
+        peers?: string[];
+        userName?: string;
+        config?: VoiceChatConfig;
+    }) => {
         this.state.id = message.id ?? null;
         this.callbacks.onPeerId(this.state.id ?? '');
         this.callbacks.onStatus('Joined. Waiting for peers...');
         this.callbacks.onMuteDisabled(false);
         this.callbacks.onUserName(message.userName ?? '');
+        this.state.config = message.config ?? null;
 
         const peers = Array.isArray(message.peers) ? message.peers : [];
         peers.forEach((peerId) => {
@@ -237,6 +258,7 @@ export class VoiceChatController {
             entry.audio.remove();
         }
         this.state.peers.delete(peerId);
+        this.state.peerData.delete(peerId);
         this.removePeerListItem(peerId);
         this.callbacks.onStatus('Peer left.');
     };
@@ -285,6 +307,10 @@ export class VoiceChatController {
         if (!message.position) {
             return;
         }
+        if (message.id) {
+            const data = this.getPeerData(message.id);
+            data.position = message.position;
+        }
         if (message.id && this.state.id && message.id !== this.state.id) {
             console.debug('[voicechat] peer position update', message.id, message.position);
             return;
@@ -297,12 +323,25 @@ export class VoiceChatController {
         if (!message.rotation) {
             return;
         }
+        if (message.id) {
+            const data = this.getPeerData(message.id);
+            data.rotation = message.rotation;
+        }
         if (message.id && this.state.id && message.id !== this.state.id) {
             console.debug('[voicechat] peer rotation update', message.id, message.rotation);
             return;
         }
         this.state.rotation = message.rotation;
         console.debug('[voicechat] rotation update', message.rotation);
+    };
+
+    private getPeerData = (peerId: string) => {
+        let data = this.state.peerData.get(peerId);
+        if (!data) {
+            data = { position: null, rotation: null, filters: {} };
+            this.state.peerData.set(peerId, data);
+        }
+        return data;
     };
 
     private connectWebSocket = (token: string) => {

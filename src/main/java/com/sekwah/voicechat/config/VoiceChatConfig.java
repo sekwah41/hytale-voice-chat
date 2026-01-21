@@ -25,6 +25,15 @@ public class VoiceChatConfig {
             .append(new KeyedCodec<Boolean>("VoiceChatDevForwardingEnabled", Codec.BOOLEAN),
                     (config, value) -> config.VoiceChatDevForwardingEnabled = value,
                     (config) -> config.VoiceChatDevForwardingEnabled).add()
+            .append(new KeyedCodec<Double>("FullVolumeRange", Codec.DOUBLE),
+                    (config, value) -> config.FullVolumeRange = value,
+                    (config) -> config.FullVolumeRange).add()
+            .append(new KeyedCodec<Double>("FallOffRange", Codec.DOUBLE),
+                    (config, value) -> config.FallOffRange = value,
+                    (config) -> config.FallOffRange).add()
+            .append(new KeyedCodec<Double>("AdditionalPeerConnectionRange", Codec.DOUBLE),
+                    (config, value) -> config.AdditionalPeerConnectionRange = value,
+                    (config) -> config.AdditionalPeerConnectionRange).add()
             .build();
 
     private int VoiceChatPort = 24454;
@@ -33,6 +42,9 @@ public class VoiceChatConfig {
     private int PeerUpdatesPerSecond = 10;
     private int AudioEffectUpdatesPerSecond = 4;
     private boolean VoiceChatDevForwardingEnabled = false;
+    private double FullVolumeRange = 12.0;
+    private double FallOffRange = 16.0;
+    private double AdditionalPeerConnectionRange = 8.0;
 
     public int getVoiceChatPort() {
         return VoiceChatPort;
@@ -56,5 +68,17 @@ public class VoiceChatConfig {
 
     public boolean isVoiceChatDevForwardingEnabled() {
         return VoiceChatDevForwardingEnabled;
+    }
+
+    public double getFullVolumeRange() {
+        return FullVolumeRange;
+    }
+
+    public double getFallOffRange() {
+        return FallOffRange;
+    }
+
+    public double getAdditionalPeerConnectionRange() {
+        return AdditionalPeerConnectionRange;
     }
 }
