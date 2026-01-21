@@ -70,6 +70,17 @@ public class VoiceChatRoom {
         return true;
     }
 
+    public boolean sendToUser(UUID userId, JsonObject message) {
+        if (userId == null) {
+            return false;
+        }
+        String clientId = clientIdsByUser.get(userId);
+        if (clientId == null) {
+            return false;
+        }
+        return sendTo(clientId, message);
+    }
+
     public void broadcast(JsonObject message, String excludeId) {
         String payload = message.toString();
         for (Map.Entry<String, Channel> entry : clients.entrySet()) {

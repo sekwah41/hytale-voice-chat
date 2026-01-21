@@ -117,4 +117,8 @@ public class VoiceChatService {
     public void playerDisconnected(UUID playerUuid) {
         room.disconnectUser(playerUuid);
     }
+
+    public VoiceChatRoom getRoom() {
+        return room;
+    }
 }
