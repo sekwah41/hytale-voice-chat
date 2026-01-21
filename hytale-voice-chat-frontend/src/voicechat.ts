@@ -5,7 +5,7 @@
 
 type PeerConnectionEntry = {
     pc: RTCPeerConnection;
-    audio: HTMLAudioElement | null;
+    pipeline: AudioPipeline | null;
 };
 
 type PeerListUpdater = (prev: PeerEntry[]) => PeerEntry[];
@@ -36,6 +36,24 @@ type PeerData = {
     filters: Record<string, unknown>;
 };
 
+type AudioFilter = {
+    id: string;
+    create: (context: AudioContext) => AudioNode;
+    update?: (
+        node: AudioNode,
+        peerId: string,
+        peerData: PeerData | undefined,
+        selfPosition: Vector3 | null,
+        config: VoiceChatConfig | null,
+    ) => void;
+    cleanup?: (node: AudioNode) => void;
+};
+
+type AudioPipeline = {
+    source: AudioNode;
+    filters: { id: string; node: AudioNode }[];
+};
+
 type VoiceChatConfig = {
     fullVolumeRange: number;
     fallOffRange: number;
@@ -51,8 +69,10 @@ export class VoiceChatController {
         ws: null as WebSocket | null,
         id: null as string | null,
         localStream: null as MediaStream | null,
+        audioContext: null as AudioContext | null,
         peers: new Map<string, PeerConnectionEntry>(),
         peerData: new Map<string, PeerData>(),
+        debugAudio: null as { peerId: string; audio: HTMLAudioElement; pipeline: AudioPipeline } | null,
         muted: false,
         pttEnabled: false,
         pttActive: false,
@@ -60,6 +80,20 @@ export class VoiceChatController {
         rotation: null as Vector3 | null,
         config: null as VoiceChatConfig | null,
     };
+    private audioFilters: AudioFilter[] = [
+        {
+            id: 'distance-gain',
+            create: (context) => context.createGain(),
+            update: (node, peerId, peerData, selfPosition, config) => {
+                if (!(node instanceof GainNode)) {
+                    return;
+                }
+                const gainValue = this.calculateDistanceGain(peerId, peerData, selfPosition, config);
+                node.gain.value = gainValue;
+                console.debug('[voicechat] gain update', peerId, gainValue);
+            },
+        },
+    ];
 
     constructor(callbacks: VoiceChatCallbacks) {
         this.callbacks = callbacks;
@@ -74,6 +108,7 @@ export class VoiceChatController {
             this.callbacks.onStatus('Requesting microphone permission...');
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.state.localStream = stream;
+            this.ensureAudioContext();
             this.callbacks.onMicStatus('Granted');
             this.connectWebSocket(token);
         } catch (error) {
@@ -105,11 +140,42 @@ export class VoiceChatController {
         }
         this.state.peers.forEach((entry) => {
             entry.pc.close();
-            if (entry.audio) {
-                entry.audio.remove();
-            }
+            this.teardownPipeline(entry.pipeline);
         });
         this.state.peers.clear();
+        this.stopDebugAudio();
+        this.state.audioContext?.close();
+        this.state.audioContext = null;
+    };
+
+    startDebugAudio = (url: string, position: Vector3) => {
+        this.stopDebugAudio();
+        const peerId = 'debug-audio';
+        const audio = new Audio(url);
+        audio.loop = true;
+        audio.volume = 1;
+        const pipeline = this.createAudioPipeline(peerId, audio);
+        if (!pipeline) {
+            return;
+        }
+        const data = this.getPeerData(peerId);
+        data.position = position;
+        this.state.debugAudio = { peerId, audio, pipeline };
+        audio.play().catch(() => {
+            // Autoplay can be blocked; keep it ready for user interaction.
+        });
+    };
+
+    stopDebugAudio = () => {
+        const debugAudio = this.state.debugAudio;
+        if (!debugAudio) {
+            return;
+        }
+        debugAudio.audio.pause();
+        debugAudio.audio.src = '';
+        this.teardownPipeline(debugAudio.pipeline);
+        this.state.debugAudio = null;
+        this.state.peerData.delete(debugAudio.peerId);
     };
 
     private sendMessage = (message: Record<string, unknown>) => {
@@ -179,13 +245,8 @@ export class VoiceChatController {
             if (!entry) {
                 return;
             }
-            if (!entry.audio) {
-                const audio = document.createElement('audio');
-                audio.autoplay = true;
-                audio.srcObject = event.streams[0];
-                audio.dataset.peer = peerId;
-                document.body.appendChild(audio);
-                entry.audio = audio;
+            if (!entry.pipeline) {
+                entry.pipeline = this.createAudioPipeline(peerId, event.streams[0]);
             }
         };
 
@@ -197,7 +258,8 @@ export class VoiceChatController {
             return this.state.peers.get(peerId)!;
         }
         const pc = this.createPeerConnection(peerId);
-        this.state.peers.set(peerId, { pc, audio: null });
+        this.state.peers.set(peerId, { pc, pipeline: null });
+        this.getPeerData(peerId);
         this.addPeerListItem(peerId);
         return this.state.peers.get(peerId)!;
     };
@@ -220,6 +282,7 @@ export class VoiceChatController {
         this.callbacks.onMuteDisabled(false);
         this.callbacks.onUserName(message.userName ?? '');
         this.state.config = message.config ?? null;
+        this.updateAllPeerFilters();
 
         const peers = Array.isArray(message.peers) ? message.peers : [];
         peers.forEach((peerId) => {
@@ -254,9 +317,7 @@ export class VoiceChatController {
             return;
         }
         entry.pc.close();
-        if (entry.audio) {
-            entry.audio.remove();
-        }
+        this.teardownPipeline(entry.pipeline);
         this.state.peers.delete(peerId);
         this.state.peerData.delete(peerId);
         this.removePeerListItem(peerId);
@@ -310,12 +371,14 @@ export class VoiceChatController {
         if (message.id) {
             const data = this.getPeerData(message.id);
             data.position = message.position;
+            this.updatePeerFilters(message.id);
         }
         if (message.id && this.state.id && message.id !== this.state.id) {
             console.debug('[voicechat] peer position update', message.id, message.position);
             return;
         }
         this.state.position = message.position;
+        this.updateAllPeerFilters();
         console.debug('[voicechat] position update', message.position);
     };
 
@@ -326,12 +389,14 @@ export class VoiceChatController {
         if (message.id) {
             const data = this.getPeerData(message.id);
             data.rotation = message.rotation;
+            this.updatePeerFilters(message.id);
         }
         if (message.id && this.state.id && message.id !== this.state.id) {
             console.debug('[voicechat] peer rotation update', message.id, message.rotation);
             return;
         }
         this.state.rotation = message.rotation;
+        this.updateAllPeerFilters();
         console.debug('[voicechat] rotation update', message.rotation);
     };
 
@@ -342,6 +407,113 @@ export class VoiceChatController {
             this.state.peerData.set(peerId, data);
         }
         return data;
+    };
+
+    private ensureAudioContext = () => {
+        if (!this.state.audioContext) {
+            this.state.audioContext = new AudioContext();
+        }
+        if (this.state.audioContext.state === 'suspended') {
+            this.state.audioContext.resume().catch(() => {
+                // Resume may fail if not called from a user gesture.
+            });
+        }
+        return this.state.audioContext;
+    };
+
+    private createAudioPipeline = (peerId: string, sourceInput: MediaStream | HTMLMediaElement) => {
+        const context = this.ensureAudioContext();
+        if (!context) {
+            return null;
+        }
+        const source =
+            sourceInput instanceof MediaStream
+                ? context.createMediaStreamSource(sourceInput)
+                : context.createMediaElementSource(sourceInput);
+        let current: AudioNode = source;
+        const filterNodes = this.audioFilters.map((filter) => {
+            const node = filter.create(context);
+            current.connect(node);
+            current = node;
+            return { id: filter.id, node };
+        });
+        current.connect(context.destination);
+        const pipeline = { source, filters: filterNodes };
+        this.updatePeerFilters(peerId);
+        return pipeline;
+    };
+
+    private teardownPipeline = (pipeline: AudioPipeline | null) => {
+        if (!pipeline) {
+            return;
+        }
+        pipeline.filters.forEach((filterNode) => {
+            const filter = this.audioFilters.find((entry) => entry.id === filterNode.id);
+            filter?.cleanup?.(filterNode.node);
+            filterNode.node.disconnect();
+        });
+        pipeline.source.disconnect();
+    };
+
+    private updatePeerFilters = (peerId: string) => {
+        const pipeline = this.getPipelineForPeer(peerId);
+        if (!pipeline) {
+            return;
+        }
+        const peerData = this.state.peerData.get(peerId);
+        this.audioFilters.forEach((filter, index) => {
+            const node = pipeline.filters[index]?.node;
+            if (!node || !filter.update) {
+                return;
+            }
+            filter.update(node, peerId, peerData, this.state.position, this.state.config);
+        });
+    };
+
+    private updateAllPeerFilters = () => {
+        this.state.peers.forEach((_, peerId) => {
+            this.updatePeerFilters(peerId);
+        });
+        if (this.state.debugAudio) {
+            this.updatePeerFilters(this.state.debugAudio.peerId);
+        }
+    };
+
+    private getPipelineForPeer = (peerId: string) => {
+        const entry = this.state.peers.get(peerId);
+        if (entry?.pipeline) {
+            return entry.pipeline;
+        }
+        if (this.state.debugAudio?.peerId === peerId) {
+            return this.state.debugAudio.pipeline;
+        }
+        return null;
+    };
+
+    private calculateDistanceGain = (
+        peerId: string,
+        peerData: PeerData | undefined,
+        selfPosition: Vector3 | null,
+        config: VoiceChatConfig | null,
+    ) => {
+        if (!peerData?.position || !selfPosition || peerId === this.state.id) {
+            return 1;
+        }
+        const fullVolumeRange = config?.fullVolumeRange ?? 12;
+        const fallOffRange = Math.max(0.0001, config?.fallOffRange ?? 16);
+        const dx = peerData.position.x - selfPosition.x;
+        const dy = peerData.position.y - selfPosition.y;
+        const dz = peerData.position.z - selfPosition.z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        console.debug('[voicechat] distance', peerId, distance);
+        if (distance <= fullVolumeRange) {
+            return 1;
+        }
+        if (distance >= fullVolumeRange + fallOffRange) {
+            return 0;
+        }
+        const fade = (distance - fullVolumeRange) / fallOffRange;
+        return Math.max(0, Math.min(1, 1 - fade));
     };
 
     private connectWebSocket = (token: string) => {

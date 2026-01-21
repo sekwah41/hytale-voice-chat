@@ -13,6 +13,8 @@ function Panel() {
     const [muted, setMuted] = useState(false);
     const [userName, setUserName] = useState('');
     const [peerId, setPeerId] = useState('');
+    const [debugAudioEnabled, setDebugAudioEnabled] = useState(false);
+    const [debugAudioPosition, setDebugAudioPosition] = useState({ x: 0, y: 130, z: 0 });
     const [, setPttActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
@@ -44,6 +46,8 @@ function Panel() {
         });
     }
 
+    const [debugAudioAvailable, setDebugAudioAvailable] = useState(false);
+
     useEffect(() => {
         const url = new URL(window.location.href);
         const tokenParam = url.searchParams.get('token');
@@ -67,6 +71,26 @@ function Panel() {
             // Ignore storage failures (private mode, storage blocked).
         }
     }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has('debugaudio')) {
+            return;
+        }
+        setDebugAudioAvailable(true);
+        return () => {};
+    }, []);
+
+    useEffect(() => {
+        if (!debugAudioAvailable) {
+            return;
+        }
+        if (debugAudioEnabled) {
+            controllerRef.current?.startDebugAudio('/voice/pirate.ogg', debugAudioPosition);
+        } else {
+            controllerRef.current?.stopDebugAudio();
+        }
+    }, [debugAudioAvailable, debugAudioEnabled, debugAudioPosition]);
 
     useEffect(() => {
         if (!token || autoStartedRef.current) {
@@ -175,6 +199,58 @@ function Panel() {
                         <span>Microphone</span>
                         <span className="statValue">{micStatus}</span>
                     </div>
+                    {debugAudioAvailable ? (
+                        <div className="stat">
+                            <span>Debug Audio</span>
+                            <div className="controls">
+                                <button
+                                    className="secondary"
+                                    onClick={() => setDebugAudioEnabled((prev) => !prev)}
+                                >
+                                    {debugAudioEnabled ? 'Stop' : 'Start'}
+                                </button>
+                                <label className="input">
+                                    X
+                                    <input
+                                        type="number"
+                                        value={debugAudioPosition.x}
+                                        onChange={(event) =>
+                                            setDebugAudioPosition((prev) => ({
+                                                ...prev,
+                                                x: Number(event.target.value),
+                                            }))
+                                        }
+                                    />
+                                </label>
+                                <label className="input">
+                                    Y
+                                    <input
+                                        type="number"
+                                        value={debugAudioPosition.y}
+                                        onChange={(event) =>
+                                            setDebugAudioPosition((prev) => ({
+                                                ...prev,
+                                                y: Number(event.target.value),
+                                            }))
+                                        }
+                                    />
+                                </label>
+                                <label className="input">
+                                    Z
+                                    <input
+                                        type="number"
+                                        value={debugAudioPosition.z}
+                                        onChange={(event) =>
+                                            setDebugAudioPosition((prev) => ({
+                                                ...prev,
+                                                z: Number(event.target.value),
+                                            }))
+                                        }
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    ) : null}
                 </section>
             </main>
 
