@@ -60,6 +60,8 @@ type VoiceChatConfig = {
     additionalPeerConnectionRange: number;
 };
 
+type PanningModel = 'HRTF' | 'equalpower';
+
 const normalizeError = (error: unknown) =>
     error instanceof Error ? error : new Error('Voice chat error.');
 
@@ -73,41 +75,55 @@ export class VoiceChatController {
         peers: new Map<string, PeerConnectionEntry>(),
         peerData: new Map<string, PeerData>(),
         debugAudio: null as { peerId: string; audio: HTMLAudioElement; pipeline: AudioPipeline } | null,
+        debugMic: null as { peerId: string; pipeline: AudioPipeline } | null,
         muted: false,
         pttEnabled: false,
         pttActive: false,
         position: null as Vector3 | null,
         rotation: null as Vector3 | null,
         config: null as VoiceChatConfig | null,
+        panningModel: 'HRTF' as PanningModel,
     };
     private audioFilters: AudioFilter[] = [
         {
-            id: 'stereo-pan',
-            create: (context) => new StereoPannerNode(context, { pan: 0 }),
-            update: (node, peerId, peerData, selfPosition, config) => {
-                if (!(node instanceof StereoPannerNode)) {
+            id: 'panner',
+            create: (context) =>
+                new PannerNode(context, {
+                    panningModel: 'HRTF',
+                    distanceModel: 'linear',
+                    refDistance: 1,
+                    maxDistance: 500,
+                    rolloffFactor: 1,
+                }),
+            update: (node, _peerId, peerData, _selfPosition, config) => {
+                if (!(node instanceof PannerNode)) {
                     return;
                 }
-                const panValue = this.calculateStereoPan(peerId, peerData, selfPosition, config);
-                this.smoothParam(node.pan, panValue);
-            },
-        },
-        {
-            id: 'distance-gain',
-            create: (context) => context.createGain(),
-            update: (node, peerId, peerData, selfPosition, config) => {
-                if (!(node instanceof GainNode)) {
-                    return;
-                }
-                const gainValue = this.calculateDistanceGain(peerId, peerData, selfPosition, config);
-                this.smoothParam(node.gain, gainValue);
-                console.debug('[voicechat] gain update', peerId, gainValue);
+                node.panningModel = this.state.panningModel;
+                const fullVolumeRange = config?.fullVolumeRange ?? 12;
+                const fallOffRange = config?.fallOffRange ?? 16;
+                const maxDistance = Math.max(fullVolumeRange, fullVolumeRange + fallOffRange);
+                node.refDistance = Math.max(0.0001, fullVolumeRange);
+                node.maxDistance = maxDistance;
+                node.rolloffFactor = 2;
+                const position = peerData?.position;
+                const x = position?.x ?? 0;
+                const y = position?.y ?? 0;
+                const z = -(position?.z ?? 0);
+                this.smoothParam(node.positionX, x);
+                this.smoothParam(node.positionY, y);
+                this.smoothParam(node.positionZ, z);
             },
         },
     ];
 
     constructor(callbacks: VoiceChatCallbacks) {
         this.callbacks = callbacks;
+    }
+
+    setPanningModel(model: PanningModel) {
+        this.state.panningModel = model;
+        this.updateAllPeerFilters();
     }
 
     startVoice = async (token: string | null) => {
@@ -155,6 +171,7 @@ export class VoiceChatController {
         });
         this.state.peers.clear();
         this.stopDebugAudio();
+        this.stopDebugMicMonitor();
         this.state.audioContext?.close();
         this.state.audioContext = null;
     };
@@ -187,6 +204,32 @@ export class VoiceChatController {
         this.teardownPipeline(debugAudio.pipeline);
         this.state.debugAudio = null;
         this.state.peerData.delete(debugAudio.peerId);
+    };
+
+    startDebugMicMonitor = (position: Vector3) => {
+        this.stopDebugMicMonitor();
+        if (!this.state.localStream) {
+            console.debug('[voicechat] debug mic monitor unavailable (no local stream)');
+            return;
+        }
+        const peerId = 'debug-mic';
+        const pipeline = this.createAudioPipeline(peerId, this.state.localStream);
+        if (!pipeline) {
+            return;
+        }
+        const data = this.getPeerData(peerId);
+        data.position = position;
+        this.state.debugMic = { peerId, pipeline };
+    };
+
+    stopDebugMicMonitor = () => {
+        const debugMic = this.state.debugMic;
+        if (!debugMic) {
+            return;
+        }
+        this.teardownPipeline(debugMic.pipeline);
+        this.state.debugMic = null;
+        this.state.peerData.delete(debugMic.peerId);
     };
 
     private sendMessage = (message: Record<string, unknown>) => {
@@ -389,6 +432,7 @@ export class VoiceChatController {
             return;
         }
         this.state.position = message.position;
+        this.updateListener();
         this.updateAllPeerFilters();
         console.debug('[voicechat] position update', message.position);
     };
@@ -407,6 +451,7 @@ export class VoiceChatController {
             return;
         }
         this.state.rotation = message.rotation;
+        this.updateListener();
         this.updateAllPeerFilters();
         console.debug('[voicechat] rotation update', message.rotation);
     };
@@ -430,6 +475,35 @@ export class VoiceChatController {
             });
         }
         return this.state.audioContext;
+    };
+
+    private updateListener = () => {
+        const context = this.state.audioContext;
+        const position = this.state.position;
+        if (!context || !position) {
+            return;
+        }
+        const listener = context.listener;
+        const yaw = -(this.state.rotation?.y ?? 0);
+        const pitch = this.state.rotation?.x ?? 0;
+        const cosPitch = Math.cos(pitch);
+        const forwardX = Math.sin(yaw) * cosPitch;
+        const forwardY = Math.sin(pitch);
+        const forwardZ = -Math.cos(yaw) * cosPitch;
+        if (listener.positionX) {
+            listener.positionX.setValueAtTime(position.x, context.currentTime);
+            listener.positionY.setValueAtTime(position.y, context.currentTime);
+            listener.positionZ.setValueAtTime(position.z, context.currentTime);
+            listener.forwardX.setValueAtTime(forwardX, context.currentTime);
+            listener.forwardY.setValueAtTime(forwardY, context.currentTime);
+            listener.forwardZ.setValueAtTime(forwardZ, context.currentTime);
+            listener.upX.setValueAtTime(0, context.currentTime);
+            listener.upY.setValueAtTime(1, context.currentTime);
+            listener.upZ.setValueAtTime(0, context.currentTime);
+        } else if (listener.setPosition && listener.setOrientation) {
+            listener.setPosition(position.x, position.y, position.z);
+            listener.setOrientation(forwardX, forwardY, forwardZ, 0, 1, 0);
+        }
     };
 
     private createAudioPipeline = (peerId: string, sourceInput: MediaStream | HTMLMediaElement) => {
@@ -488,6 +562,9 @@ export class VoiceChatController {
         if (this.state.debugAudio) {
             this.updatePeerFilters(this.state.debugAudio.peerId);
         }
+        if (this.state.debugMic) {
+            this.updatePeerFilters(this.state.debugMic.peerId);
+        }
     };
 
     private getPipelineForPeer = (peerId: string) => {
@@ -498,55 +575,10 @@ export class VoiceChatController {
         if (this.state.debugAudio?.peerId === peerId) {
             return this.state.debugAudio.pipeline;
         }
+        if (this.state.debugMic?.peerId === peerId) {
+            return this.state.debugMic.pipeline;
+        }
         return null;
-    };
-
-    private calculateDistanceGain = (
-        peerId: string,
-        peerData: PeerData | undefined,
-        selfPosition: Vector3 | null,
-        config: VoiceChatConfig | null,
-    ) => {
-        if (!peerData?.position || !selfPosition || peerId === this.state.id) {
-            return 1;
-        }
-        const fullVolumeRange = config?.fullVolumeRange ?? 12;
-        const fallOffRange = Math.max(0.0001, config?.fallOffRange ?? 16);
-        const dx = peerData.position.x - selfPosition.x;
-        const dy = peerData.position.y - selfPosition.y;
-        const dz = peerData.position.z - selfPosition.z;
-        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        console.debug('[voicechat] distance', peerId, distance);
-        if (distance <= fullVolumeRange) {
-            return 1;
-        }
-        if (distance >= fullVolumeRange + fallOffRange) {
-            return 0;
-        }
-        const fade = (distance - fullVolumeRange) / fallOffRange;
-        return Math.max(0, Math.min(1, 1 - fade));
-    };
-
-    private calculateStereoPan = (
-        peerId: string,
-        peerData: PeerData | undefined,
-        selfPosition: Vector3 | null,
-        _config: VoiceChatConfig | null,
-    ) => {
-        if (!peerData?.position || !selfPosition || peerId === this.state.id) {
-            return 0;
-        }
-        const selfYaw = this.state.rotation?.y;
-        if (selfYaw == null) {
-            return 0;
-        }
-        const dx = peerData.position.x - selfPosition.x;
-        const dz = peerData.position.z - selfPosition.z;
-        const angleToPeer = Math.atan2(dx, dz);
-        const relativeYaw = this.normalizeAngle(angleToPeer - selfYaw);
-        const pan = Math.sin(relativeYaw);
-        const clamped = Math.max(-1, Math.min(1, pan));
-        return clamped * 0.8;
     };
 
     private smoothParam = (param: AudioParam, value: number) => {
@@ -557,17 +589,6 @@ export class VoiceChatController {
         }
         const now = context.currentTime;
         param.setTargetAtTime(value, now, 0.05);
-    };
-
-    private normalizeAngle = (angle: number) => {
-        let result = angle;
-        while (result > Math.PI) {
-            result -= Math.PI * 2;
-        }
-        while (result < -Math.PI) {
-            result += Math.PI * 2;
-        }
-        return result;
     };
 
     private connectWebSocket = (token: string) => {

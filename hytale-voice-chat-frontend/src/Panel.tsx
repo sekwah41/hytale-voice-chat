@@ -14,7 +14,9 @@ function Panel() {
     const [userName, setUserName] = useState('');
     const [peerId, setPeerId] = useState('');
     const [debugAudioEnabled, setDebugAudioEnabled] = useState(false);
+    const [debugMicEnabled, setDebugMicEnabled] = useState(false);
     const [debugAudioPosition, setDebugAudioPosition] = useState({ x: 0, y: 130, z: 0 });
+    const [panningModel, setPanningModel] = useState<'HRTF' | 'equalpower'>('HRTF');
     const [, setPttActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
@@ -93,6 +95,17 @@ function Panel() {
     }, [debugAudioAvailable, debugAudioEnabled, debugAudioPosition]);
 
     useEffect(() => {
+        if (!debugAudioAvailable) {
+            return;
+        }
+        if (debugMicEnabled) {
+            controllerRef.current?.startDebugMicMonitor(debugAudioPosition);
+        } else {
+            controllerRef.current?.stopDebugMicMonitor();
+        }
+    }, [debugAudioAvailable, debugMicEnabled, debugAudioPosition]);
+
+    useEffect(() => {
         if (!token || autoStartedRef.current) {
             return;
         }
@@ -133,6 +146,13 @@ function Panel() {
         controllerRef.current?.togglePttMode();
     };
 
+    const togglePanningModel = () => {
+        const nextModel = panningModel === 'HRTF' ? 'equalpower' : 'HRTF';
+        setPanningModel(nextModel);
+        debugger;
+        controllerRef.current?.setPanningModel(nextModel);
+    };
+
     return (
         <div className="shell">
             <header>
@@ -153,7 +173,13 @@ function Panel() {
                         <button className="secondary" onClick={togglePttMode} disabled={true}>
                             {'Push-to-talk: Disabled'}
                         </button>
+                        <button className="secondary" onClick={togglePanningModel}>
+                            Panning: {panningModel === 'HRTF' ? 'HRTF' : 'Equal Power'}
+                        </button>
                     </div>
+                    <p className="mini">
+                        HRTF has better directional audio; Equal Power is clearer and may also be better when not wearing headphones.
+                    </p>
                     <div className="hint">
                         <p>
                             Push-to-talk mode is not yet implemented. Once I have the rest working I
@@ -208,6 +234,12 @@ function Panel() {
                                     onClick={() => setDebugAudioEnabled((prev) => !prev)}
                                 >
                                     {debugAudioEnabled ? 'Stop' : 'Start'}
+                                </button>
+                                <button
+                                    className="secondary"
+                                    onClick={() => setDebugMicEnabled((prev) => !prev)}
+                                >
+                                    {debugMicEnabled ? 'Stop Mic' : 'Monitor Mic'}
                                 </button>
                                 <label className="input">
                                     X
