@@ -131,7 +131,7 @@ function Panel() {
                     <div className="hint">
                         <p>
                             Push-to-talk mode is not yet implemented. Once I have the rest working I
-                            will look to add a hotkey and an indicator in game.
+                            will look to add a hotkey and an indicator in game if possible.
                         </p>
                     </div>
                 </section>

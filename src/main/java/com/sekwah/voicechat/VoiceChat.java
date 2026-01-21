@@ -11,6 +11,7 @@ import com.sekwah.voicechat.commands.VoiceChatCommand;
 import com.sekwah.voicechat.config.VoiceChatConfig;
 import com.sekwah.voicechat.config.VoiceChatSessionsConfig;
 import com.sekwah.voicechat.server.VoiceChatService;
+import com.sekwah.voicechat.systems.VoiceDataBroadcastSystem;
 import com.sekwah.voicechat.systems.VoicePositionSystem;
 import com.sekwah.voicechat.systems.components.VoiceChatComponent;
 import org.jetbrains.annotations.Nullable;
@@ -50,6 +51,7 @@ public class VoiceChat extends JavaPlugin {
         this.voiceChatComponentType = this.getEntityStoreRegistry().registerComponent(VoiceChatComponent.class, VoiceChatComponent::new);
 
         this.getEntityStoreRegistry().registerSystem(new VoicePositionSystem(this.voiceChatComponentType, this.service.getRoom()));
+        this.getEntityStoreRegistry().registerSystem(new VoiceDataBroadcastSystem(this.voiceChatComponentType, this.service.getRoom()));
     }
 
     @Override

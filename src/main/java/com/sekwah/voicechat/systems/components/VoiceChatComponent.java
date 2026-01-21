@@ -9,7 +9,11 @@ import org.jetbrains.annotations.Nullable;
 public class VoiceChatComponent implements Component<EntityStore> {
 
     public Vector3d lastSentPosition;
+    public Vector3d currentPosition;
+    public boolean markPositionDirty;
     public Vector3f lastSentRotation;
+    public Vector3f currentRotation;
+    public boolean markRotationDirty;
 
     // Will broadcast its locations to other players at a set interval
     // Though players will be updated about their rotation data more frequently
@@ -17,7 +21,11 @@ public class VoiceChatComponent implements Component<EntityStore> {
 
     public VoiceChatComponent(VoiceChatComponent voiceChatComponent) {
         this.lastSentPosition = voiceChatComponent.lastSentPosition;
+        this.currentPosition = voiceChatComponent.currentPosition;
         this.lastSentRotation = voiceChatComponent.lastSentRotation;
+        this.currentRotation = voiceChatComponent.currentRotation;
+        this.markPositionDirty = voiceChatComponent.markPositionDirty;
+        this.markRotationDirty = voiceChatComponent.markRotationDirty;
         this.timeSinceLastUpdate = voiceChatComponent.timeSinceLastUpdate;
     }
 

@@ -22,6 +22,12 @@ type VoiceChatCallbacks = {
     onPeerListUpdate: (updater: PeerListUpdater) => void;
 };
 
+type Vector3 = {
+    x: number;
+    y: number;
+    z: number;
+};
+
 const normalizeError = (error: unknown) =>
     error instanceof Error ? error : new Error('Voice chat error.');
 
@@ -35,6 +41,8 @@ export class VoiceChatController {
         muted: false,
         pttEnabled: false,
         pttActive: false,
+        position: null as Vector3 | null,
+        rotation: null as Vector3 | null,
     };
 
     constructor(callbacks: VoiceChatCallbacks) {
@@ -271,6 +279,22 @@ export class VoiceChatController {
         }
     };
 
+    private handlePosition = (message: { position?: Vector3 }) => {
+        if (!message.position) {
+            return;
+        }
+        this.state.position = message.position;
+        console.debug('[voicechat] position update', message.position);
+    };
+
+    private handleRotation = (message: { rotation?: Vector3 }) => {
+        if (!message.rotation) {
+            return;
+        }
+        this.state.rotation = message.rotation;
+        console.debug('[voicechat] rotation update', message.rotation);
+    };
+
     private connectWebSocket = (token: string) => {
         const params = new URLSearchParams(window.location.search);
         const address = params.get('address') ?? window.location.host;
@@ -349,6 +373,12 @@ export class VoiceChatController {
                     }
                     break;
                 }
+                case 'position':
+                    this.handlePosition(message as { position?: Vector3 });
+                    break;
+                case 'rotation':
+                    this.handleRotation(message as { rotation?: Vector3 });
+                    break;
                 case 'error':
                     this.handleError(
                         new Error((message as { message?: string }).message || 'Voice chat error.'),

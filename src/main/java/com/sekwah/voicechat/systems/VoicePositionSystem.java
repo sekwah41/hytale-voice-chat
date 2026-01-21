@@ -4,12 +4,9 @@ import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.math.vector.Vector3d;
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.ModelTransform;
-import com.hypixel.hytale.protocol.Position;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
@@ -23,8 +20,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 public class VoicePositionSystem extends EntityTickingSystem<EntityStore> {
-    private static final Gson GSON = new Gson();
-
     private final ComponentType<EntityStore, VoiceChatComponent> voiceChatComponentType;
     private final VoiceChatRoom room;
 
@@ -35,15 +30,25 @@ public class VoicePositionSystem extends EntityTickingSystem<EntityStore> {
 
     @Override
     public void tick(float dt, int index, @NotNull ArchetypeChunk<EntityStore> archetypeChunk, @NotNull Store<EntityStore> store, @NotNull CommandBuffer<EntityStore> commandBuffer) {
-
         Ref<EntityStore> ref = archetypeChunk.getReferenceTo(index);
 
-        TransformComponent transformComp = commandBuffer.getComponent(ref, TransformComponent.getComponentType());
+        PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
+        UUID userId = playerRef != null ? playerRef.getUuid() : null;
+        boolean connected = userId != null && room.isUserConnected(userId);
         VoiceChatComponent voiceChatComponent = commandBuffer.getComponent(ref, this.voiceChatComponentType);
-        if(voiceChatComponent == null) {
+
+        if (!connected) {
+            if (voiceChatComponent != null) {
+                commandBuffer.removeComponent(ref, this.voiceChatComponentType);
+            }
+            return;
+        }
+
+        if (voiceChatComponent == null) {
             voiceChatComponent = new VoiceChatComponent();
         }
 
+        TransformComponent transformComp = commandBuffer.getComponent(ref, TransformComponent.getComponentType());
         voiceChatComponent.timeSinceLastUpdate += dt;
 
         if (voiceChatComponent.timeSinceLastUpdate > 0.1) {
@@ -55,38 +60,17 @@ public class VoicePositionSystem extends EntityTickingSystem<EntityStore> {
         Direction direction = rotation.lookOrientation;
         Vector3f rotationVec = new Vector3f(direction.pitch, direction.yaw, direction.roll);
 
-        // Will clean up and move this logic into a more general pipeline later
-        // Rather than doing on each entity probably will switch to a server wide update and then loop over everything gathering data.
-        PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
-        UUID userId = playerRef != null ? playerRef.getUuid() : null;
-        if (userId != null) {
-            if (!room.isUserConnected(userId)) {
-                voiceChatComponent.lastSentPosition = null;
-                voiceChatComponent.lastSentRotation = null;
-            } else {
-                boolean positionChanged = !sameVector(position, voiceChatComponent.lastSentPosition);
-                if (positionChanged) {
-                    VoiceChat.LOGGER.atInfo().log("Position changed for user " + userId);
-                    JsonObject message = new JsonObject();
-                    message.addProperty("type", "position");
-                    message.add("position", GSON.toJsonTree(position));
-                    if (room.sendToUser(userId, message)) {
-                        voiceChatComponent.lastSentPosition = position.clone();
-                    }
-                }
-
-                boolean rotationChanged = !sameVector(rotationVec, voiceChatComponent.lastSentRotation);
-                if (rotationChanged) {
-                    JsonObject message = new JsonObject();
-                    message.addProperty("type", "rotation");
-                    message.add("rotation", GSON.toJsonTree(rotationVec));
-                    if (room.sendToUser(userId, message)) {
-                        voiceChatComponent.lastSentRotation = rotationVec.clone();
-                    }
-                }
-            }
+        boolean positionChanged = !sameVector(position, voiceChatComponent.currentPosition);
+        if (positionChanged) {
+            voiceChatComponent.currentPosition = position.clone();
+            voiceChatComponent.markPositionDirty = true;
         }
 
+        boolean rotationChanged = !sameVector(rotationVec, voiceChatComponent.currentRotation);
+        if (rotationChanged) {
+            voiceChatComponent.currentRotation = rotationVec.clone();
+            voiceChatComponent.markRotationDirty = true;
+        }
 
         commandBuffer.putComponent(ref, this.voiceChatComponentType, voiceChatComponent);
     }
