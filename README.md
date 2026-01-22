@@ -80,7 +80,8 @@ Initially this was just a test mod, though I do plan to add more features in the
 - Support for custom TURN servers to proxy the voice chat.
 - In game UI to configure various voice chat settings.
 - Audio effects such as reverb based on environment.
-- Explore support with the online share codes for personal words.
+
+To see the full board of planned features and tasks, check out the [project board](https://github.com/users/sekwah41/projects/16)
 
 ## Contributions
 If you would like to contribute to the development of the mod, please feel free to fork the repository and submit a pull request. Any help is greatly appreciated!
