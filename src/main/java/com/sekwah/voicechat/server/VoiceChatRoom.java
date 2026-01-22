@@ -18,11 +18,13 @@ public class VoiceChatRoom {
     private final Map<String, Channel> clients = new ConcurrentHashMap<>();
     private final Map<UUID, String> clientIdsByUser = new ConcurrentHashMap<>();
     private final Map<String, UUID> userIdsByClient = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicBoolean fullSyncRequested = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public void register(UUID userId, String id, Channel channel) {
         clients.put(id, channel);
         clientIdsByUser.put(userId, id);
         userIdsByClient.put(id, userId);
+        requestFullSync();
     }
 
     public void remove(String id) {
@@ -107,5 +109,13 @@ public class VoiceChatRoom {
         message.addProperty("id", id);
         message.add(field, value);
         broadcast(message, id);
+    }
+
+    public void requestFullSync() {
+        fullSyncRequested.set(true);
+    }
+
+    public boolean consumeFullSyncRequested() {
+        return fullSyncRequested.getAndSet(false);
     }
 }

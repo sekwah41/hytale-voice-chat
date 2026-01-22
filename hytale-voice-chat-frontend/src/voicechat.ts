@@ -109,7 +109,7 @@ export class VoiceChatController {
                 const position = peerData?.position;
                 const x = position?.x ?? 0;
                 const y = position?.y ?? 0;
-                const z = -(position?.z ?? 0);
+                const z = position?.z ?? 0;
                 this.smoothParam(node.positionX, x);
                 this.smoothParam(node.positionY, y);
                 this.smoothParam(node.positionZ, z);
@@ -189,6 +189,7 @@ export class VoiceChatController {
         const data = this.getPeerData(peerId);
         data.position = position;
         this.state.debugAudio = { peerId, audio, pipeline };
+        this.updatePeerFilters(peerId);
         audio.play().catch(() => {
             // Autoplay can be blocked; keep it ready for user interaction.
         });
@@ -220,6 +221,7 @@ export class VoiceChatController {
         const data = this.getPeerData(peerId);
         data.position = position;
         this.state.debugMic = { peerId, pipeline };
+        this.updatePeerFilters(peerId);
     };
 
     stopDebugMicMonitor = () => {

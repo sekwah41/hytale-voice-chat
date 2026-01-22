@@ -32,6 +32,7 @@ public class VoiceDataBroadcastSystem extends TickingSystem<EntityStore> {
     @Override
     public void tick(float v, int i, @NotNull Store<EntityStore> store) {
         Universe universe = Universe.get();
+        boolean forceSync = room.consumeFullSyncRequested();
         for (PlayerRef player : universe.getPlayers()) {
             Ref<EntityStore> ref = player.getReference();
             if(ref == null) {
@@ -53,7 +54,7 @@ public class VoiceDataBroadcastSystem extends TickingSystem<EntityStore> {
                 continue;
             }
 
-            boolean shouldSendPosition = voiceChatComponent.markPositionDirty
+            boolean shouldSendPosition = (forceSync || voiceChatComponent.markPositionDirty)
                     && voiceChatComponent.currentPosition != null;
             if (shouldSendPosition) {
                 JsonObject message = new JsonObject();
