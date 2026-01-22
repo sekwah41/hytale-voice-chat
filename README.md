@@ -2,17 +2,12 @@
 
 An open-source proximity voice chat mod which only needs a browser page to be kept open in the background.
 
-By default, I have a turn server hosted on a small VPS for public use, so you can just use this mod as is without any extra setup.
-However, if you want to set up your own TURN server for better performance or privacy, you can point the mod to your own server in the config file.
-
-If my TURN server becomes overloaded, you can switch to peer-to-peer mode or set up your own TURN server.
-Though if the mod becomes popular enough, I may look into getting a better server or switch the default to Peer to Peer with TURN fallback.
-
 ## Features
  * No additional software needed, just a web browser.
  * 3D Proximity based voice chat.
  * Clients remember their settings between sessions so you don't have to type the command each time, just re-open the page.
- * Configurable connection methods (TURN server, Peer to Peer, or both (uses TURN as a fallback)).
+ * Configurable connection methods ((TURN server, Peer to Peer, or both (uses TURN as a fallback)).
+   * Will be this, currently its just peer to peer.
 
 ## What will happen when Hytale adds their own voice chat?
 Ideally all of these voice chat mods will become obsolete relatively soon once Hytale adds their own built-in voice chat system.
