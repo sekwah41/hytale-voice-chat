@@ -43,7 +43,7 @@ public class VoiceChatConfig {
     private int AudioEffectUpdatesPerSecond = 4;
     private boolean VoiceChatDevForwardingEnabled = false;
     private double FullVolumeRange = 20.0;
-    private double FallOffRange = 20.0;
+    private double FallOffRange = 40.0;
     private double AdditionalPeerConnectionRange = 8.0;
 
     public int getVoiceChatPort() {

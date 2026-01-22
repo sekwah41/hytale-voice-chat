@@ -103,9 +103,10 @@ export class VoiceChatController {
                 const fullVolumeRange = config?.fullVolumeRange ?? 12;
                 const fallOffRange = config?.fallOffRange ?? 16;
                 const maxDistance = Math.max(fullVolumeRange, fullVolumeRange + fallOffRange);
+                node.distanceModel = 'exponential';
                 node.refDistance = Math.max(0.0001, fullVolumeRange);
                 node.maxDistance = maxDistance;
-                node.rolloffFactor = 2;
+                node.rolloffFactor = 1.2;
                 const position = peerData?.position;
                 const x = position?.x ?? 0;
                 const y = position?.y ?? 0;
@@ -113,6 +114,17 @@ export class VoiceChatController {
                 this.smoothParam(node.positionX, x);
                 this.smoothParam(node.positionY, y);
                 this.smoothParam(node.positionZ, z);
+            },
+        },
+        {
+            id: 'distance-gain',
+            create: (context) => context.createGain(),
+            update: (node, peerId, peerData, selfPosition, config) => {
+                if (!(node instanceof GainNode)) {
+                    return;
+                }
+                const gainValue = this.calculateDistanceGain(peerId, peerData, selfPosition, config);
+                this.smoothParam(node.gain, gainValue);
             },
         },
     ];
@@ -591,6 +603,31 @@ export class VoiceChatController {
         }
         const now = context.currentTime;
         param.setTargetAtTime(value, now, 0.05);
+    };
+
+    private calculateDistanceGain = (
+        peerId: string,
+        peerData: PeerData | undefined,
+        selfPosition: Vector3 | null,
+        config: VoiceChatConfig | null,
+    ) => {
+        if (!peerData?.position || !selfPosition || peerId === this.state.id) {
+            return 1;
+        }
+        const fullVolumeRange = config?.fullVolumeRange ?? 12;
+        const fallOffRange = Math.max(0.0001, config?.fallOffRange ?? 16);
+        const dx = peerData.position.x - selfPosition.x;
+        const dy = peerData.position.y - selfPosition.y;
+        const dz = peerData.position.z - selfPosition.z;
+        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance <= fullVolumeRange) {
+            return 1;
+        }
+        if (distance >= fullVolumeRange + fallOffRange) {
+            return 0;
+        }
+        const fade = (distance - fullVolumeRange) / fallOffRange;
+        return Math.max(0, Math.min(1, 1 - fade));
     };
 
     private connectWebSocket = (token: string) => {

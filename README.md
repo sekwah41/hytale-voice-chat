@@ -89,3 +89,5 @@ Initially this was just a test mod, though I do plan to add more features in the
 
 ## Contributions
 If you would like to contribute to the development of the mod, please feel free to fork the repository and submit a pull request. Any help is greatly appreciated!
+
+See the contributing guidelines in CONTRIBUTING.md for more details on how to setup the project and submit changes.
