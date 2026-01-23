@@ -181,6 +181,11 @@ button:disabled {
     background: rgba(20, 18, 31, 0.08);
 }
 
+.statActive {
+    background: rgba(37, 160, 91, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(37, 160, 91, 0.35);
+}
+
 .statAwaitingValue {
     opacity: 0.5;
 }

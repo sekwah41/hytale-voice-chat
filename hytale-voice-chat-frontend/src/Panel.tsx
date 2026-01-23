@@ -18,9 +18,9 @@ function Panel() {
     const [debugAudioPosition, setDebugAudioPosition] = useState({ x: 0, y: 130, z: 0 });
     const [panningModel, setPanningModel] = useState<'HRTF' | 'equalpower'>('HRTF');
     const [, setPttActive] = useState(false);
+    const [micActive, setMicActive] = useState(false);
     const [peerList, setPeerList] = useState<PeerEntry[]>([]);
     const controllerRef = useRef<VoiceChatController | null>(null);
-    const autoStartedRef = useRef(false);
     if (!controllerRef.current) {
         const logStatus = (label: string, value: string) => {
             console.log(`[voicechat] ${label}: ${value}`);
@@ -45,6 +45,7 @@ function Panel() {
             onUserName: setUserName,
             onPttActive: setPttActive,
             onPeerListUpdate: setPeerList,
+            onSelfActivity: setMicActive,
         });
     }
 
@@ -76,7 +77,7 @@ function Panel() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        if (!params.has('debugaudio')) {
+        if (!params.has('debugaudio') && !params.has('debug')) {
             return;
         }
         setDebugAudioAvailable(true);
@@ -106,26 +107,11 @@ function Panel() {
     }, [debugAudioAvailable, debugMicEnabled, debugAudioPosition]);
 
     useEffect(() => {
-        if (!token || autoStartedRef.current) {
+        if (!debugAudioAvailable) {
             return;
         }
-        let cancelled = false;
-        navigator.permissions
-            .query({ name: 'microphone' as PermissionName })
-            .then((result) => {
-                if (cancelled || result.state !== 'granted') {
-                    return;
-                }
-                autoStartedRef.current = true;
-                controllerRef.current?.startVoice(token);
-            })
-            .catch(() => {
-                // Ignore permission API failures.
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [token]);
+        controllerRef.current?.setDebugPosition(debugAudioPosition);
+    }, [debugAudioAvailable, debugAudioPosition]);
 
     useEffect(
         () => () => {
@@ -149,7 +135,6 @@ function Panel() {
     const togglePanningModel = () => {
         const nextModel = panningModel === 'HRTF' ? 'equalpower' : 'HRTF';
         setPanningModel(nextModel);
-        debugger;
         controllerRef.current?.setPanningModel(nextModel);
     };
 
@@ -224,6 +209,12 @@ function Panel() {
                     <div className="stat">
                         <span>Microphone</span>
                         <span className="statValue">{micStatus}</span>
+                    </div>
+                    <div className="stat">
+                        <span>Mic Activity</span>
+                        <span className={`statValue ${micActive ? 'statActive' : ''}`}>
+                            {micActive ? 'Speaking' : 'Silent'}
+                        </span>
                     </div>
                     {debugAudioAvailable ? (
                         <div className="stat">

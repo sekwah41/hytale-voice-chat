@@ -12,6 +12,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.sekwah.voicechat.gui.VoiceChatLinkGui;
+import com.sekwah.voicechat.commands.subcommand.VoiceChatDebugCommand;
 import com.sekwah.voicechat.server.VoiceChatService;
 import org.jetbrains.annotations.NotNull;
 
@@ -27,6 +28,8 @@ public class VoiceChatCommand extends AbstractAsyncCommand {
         this.service = service;
 
         this.addAliases("vc", "voicechat");
+
+        this.addSubCommand(new VoiceChatDebugCommand(service));
 
         this.setPermissionGroup(GameMode.Adventure);
     }

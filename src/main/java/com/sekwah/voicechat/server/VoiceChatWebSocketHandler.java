@@ -23,6 +23,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
     private static final AttributeKey<String> CLIENT_ID = AttributeKey.valueOf("voicechat_client_id");
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("voicechat_authenticated");
     private static final AttributeKey<UUID> CLIENT_USER_ID = AttributeKey.valueOf("voicechat_user_id");
+    private static final AttributeKey<Boolean> DEBUG_SESSION = AttributeKey.valueOf("voicechat_debug_session");
 
     private final VoiceChatRoom room;
     private final VoiceChatTokenStore tokens;
@@ -70,6 +71,9 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
             case "ptt":
                 broadcastState(ctx, payload, "ptt", "active");
                 break;
+            case "debug-position":
+                handleDebugPosition(ctx, payload);
+                break;
             default:
                 sendError(ctx, "Unknown message type: " + type);
         }
@@ -99,7 +103,11 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         VoiceChat.LOGGER.atInfo().log(
             "Voice chat client disconnected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id
         );
-        if (userId != null) {
+        Boolean debugSession = ctx.channel().attr(DEBUG_SESSION).get();
+        if (Boolean.TRUE.equals(debugSession) && userId != null) {
+            tokens.clearDebugSession(userId);
+        }
+        if (userId != null && !Boolean.TRUE.equals(debugSession)) {
             PlayerRef playerRef = Universe.get().getPlayer(userId);
             playerRef.sendMessage(Message.translation("commands.success.voicechat.disconnected").color(Color.RED));
             VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Clay_Pot_Small_Break");
@@ -108,28 +116,31 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
 
     private void handleHello(ChannelHandlerContext ctx, JsonObject payload) {
         String token = getString(payload, "token");
-        UUID userId = tokens.consumeTokenForUser(token);
-        if (userId == null) {
+        VoiceChatTokenStore.TokenInfo tokenInfo = tokens.consumeToken(token);
+        if (tokenInfo == null) {
             sendError(ctx, "Invalid or expired token. Please re-run /voice chat command.");
             return;
         }
+        UUID userId = tokenInfo.userId();
+        boolean debugSession = tokenInfo.debug();
         if (room.isUserConnected(userId)) {
             room.disconnectUser(userId);
         }
 
         String id = UUID.randomUUID().toString().replace("-", "");
         PlayerRef playerRef = Universe.get().getPlayer(userId);
-        if(playerRef == null) {
+        if (!debugSession && playerRef == null) {
             sendError(ctx, "User not found in universe. Please ensure you are connected to the server. This may take a few mins in some cases.");
             return;
         }
-        String userName = playerRef.getUsername();
+        String userName = playerRef == null ? "Debug" : playerRef.getUsername();
         String nameLabel = (userName == null || userName.isBlank()) ? "Unknown" : userName;
         String clientName = (userName == null || userName.isBlank()) ? "" : userName;
         VoiceChat.LOGGER.atInfo().log("Voice chat client connected: userName=" + nameLabel + ", userId=" + userId + ", clientId=" + id);
         ctx.channel().attr(CLIENT_ID).set(id);
         ctx.channel().attr(AUTHENTICATED).set(true);
         ctx.channel().attr(CLIENT_USER_ID).set(userId);
+        ctx.channel().attr(DEBUG_SESSION).set(debugSession);
         JsonElement existingPeers = gson.toJsonTree(room.peerIdsSnapshot());
         room.register(userId, id, ctx.channel());
 
@@ -143,6 +154,7 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         configPayload.addProperty("fallOffRange", config.getFallOffRange());
         configPayload.addProperty("additionalPeerConnectionRange", config.getAdditionalPeerConnectionRange());
         welcome.add("config", configPayload);
+        welcome.addProperty("debug", debugSession);
         welcome.add("peers", existingPeers);
         ctx.channel().writeAndFlush(new TextWebSocketFrame(welcome.toString()));
 
@@ -151,8 +163,10 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         join.addProperty("id", id);
         room.broadcast(join, id);
 
-        playerRef.sendMessage(Message.translation("commands.success.voicechat.connected").color(Color.GREEN));
-        VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Capture_Crate_spawn_Succeed");
+        if (!debugSession && playerRef != null) {
+            playerRef.sendMessage(Message.translation("commands.success.voicechat.connected").color(Color.GREEN));
+            VoiceChatSoundUtil.playUiSound(playerRef, "SFX_Capture_Crate_spawn_Succeed");
+        }
     }
 
     private void forwardSignal(ChannelHandlerContext ctx, JsonObject payload, String type) {
@@ -195,6 +209,25 @@ public class VoiceChatWebSocketHandler extends SimpleChannelInboundHandler<TextW
         error.addProperty("type", "error");
         error.addProperty("message", message);
         ctx.channel().writeAndFlush(new TextWebSocketFrame(error.toString()));
+    }
+
+    private void handleDebugPosition(ChannelHandlerContext ctx, JsonObject payload) {
+        Boolean debugSession = ctx.channel().attr(DEBUG_SESSION).get();
+        if (!Boolean.TRUE.equals(debugSession)) {
+            sendError(ctx, "Debug position updates are not allowed for this session.");
+            return;
+        }
+        JsonElement position = payload.get("position");
+        String id = ctx.channel().attr(CLIENT_ID).get();
+        if (position == null || id == null) {
+            sendError(ctx, "Missing debug position.");
+            return;
+        }
+        JsonObject message = new JsonObject();
+        message.addProperty("type", "position");
+        message.addProperty("id", id);
+        message.add("position", position);
+        room.broadcast(message, null);
     }
 
     private String getString(JsonObject payload, String key) {

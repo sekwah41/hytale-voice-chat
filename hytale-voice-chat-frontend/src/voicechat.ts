@@ -1,4 +1,4 @@
- export type PeerEntry = {
+export type PeerEntry = {
     id: string;
     state: string;
 };
@@ -21,6 +21,7 @@ type VoiceChatCallbacks = {
     onUserName: (name: string) => void;
     onPttActive: (active: boolean) => void;
     onPeerListUpdate: (updater: PeerListUpdater) => void;
+    onSelfActivity: (active: boolean) => void;
 };
 
 type Vector3 = {
@@ -83,7 +84,17 @@ export class VoiceChatController {
         rotation: null as Vector3 | null,
         config: null as VoiceChatConfig | null,
         panningModel: 'HRTF' as PanningModel,
+        debugSession: false,
+        debugPosition: null as Vector3 | null,
     };
+    private micSource: MediaStreamAudioSourceNode | null = null;
+    private micAnalyser: AnalyserNode | null = null;
+    private micMeterGain: GainNode | null = null;
+    private meterIntervalId: number | null = null;
+    private meterBuffers = new WeakMap<AnalyserNode, Uint8Array<ArrayBuffer>>();
+    private meterFloatBuffers = new WeakMap<AnalyserNode, Float32Array<ArrayBuffer>>();
+    private meterFreqBuffers = new WeakMap<AnalyserNode, Uint8Array<ArrayBuffer>>();
+    private selfActivity = { active: false, lastActiveAt: 0 };
     private audioFilters: AudioFilter[] = [
         {
             id: 'panner',
@@ -141,18 +152,31 @@ export class VoiceChatController {
     startVoice = async (token: string | null) => {
         try {
             if (!token) {
-                throw new Error('Missing token. Run /voice in-game to get a link.');
+                this.handleError(new Error('Missing token. Run /voice in-game to get a link.'));
+                return;
             }
             this.callbacks.onJoinDisabled(true);
             this.callbacks.onStatus('Requesting microphone permission...');
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.state.localStream = stream;
             this.ensureAudioContext();
+            this.state.localStream = await navigator.mediaDevices.getUserMedia({audio: true});
+            this.ensureAudioContext();
+            this.setupMicMeter();
+            this.updateTrackState();
+            this.startMeterLoop();
+            console.log(`[voicechat][meter] active interval=${this.meterIntervalId}`);
             this.callbacks.onMicStatus('Granted');
             this.connectWebSocket(token);
         } catch (error) {
             this.handleError(normalizeError(error));
         }
+    };
+
+    setDebugPosition = (position: Vector3) => {
+        this.state.debugPosition = position;
+        if (!this.state.debugSession) {
+            return;
+        }
+        this.sendMessage({ type: 'debug-position', position });
     };
 
     toggleMute = () => {
@@ -164,8 +188,7 @@ export class VoiceChatController {
     };
 
     togglePttMode = () => {
-        const nextEnabled = !this.state.pttEnabled;
-        this.state.pttEnabled = nextEnabled;
+        this.state.pttEnabled = !this.state.pttEnabled;
         this.state.pttActive = false;
         this.callbacks.onPttActive(false);
         this.updateTrackState();
@@ -173,6 +196,7 @@ export class VoiceChatController {
     };
 
     destroy = () => {
+        console.log(`[voicechat] destroy called, interval=${this.meterIntervalId}`);
         this.state.ws?.close();
         if (this.state.localStream) {
             this.state.localStream.getTracks().forEach((track) => track.stop());
@@ -184,6 +208,8 @@ export class VoiceChatController {
         this.state.peers.clear();
         this.stopDebugAudio();
         this.stopDebugMicMonitor();
+        this.stopMeterLoop();
+        this.teardownMicMeter();
         this.state.audioContext?.close();
         this.state.audioContext = null;
     };
@@ -302,6 +328,29 @@ export class VoiceChatController {
             });
         }
 
+        const setPeerConnectionState = () => {
+            const state = pc.connectionState;
+            if (state === 'connected') {
+                this.updatePeerState(peerId, 'Connected');
+            } else if (state === 'connecting') {
+                this.updatePeerState(peerId, 'Connecting');
+            } else if (state === 'disconnected') {
+                this.updatePeerState(peerId, 'Disconnected');
+            } else if (state === 'failed') {
+                this.updatePeerState(peerId, 'Failed');
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            setPeerConnectionState();
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            if (pc.iceConnectionState === 'failed') {
+                this.updatePeerState(peerId, 'Failed');
+            }
+        };
+
         pc.onicecandidate = (event) => {
             if (event.candidate) {
                 this.sendMessage({ type: 'ice', to: peerId, candidate: event.candidate });
@@ -343,6 +392,7 @@ export class VoiceChatController {
         peers?: string[];
         userName?: string;
         config?: VoiceChatConfig;
+        debug?: boolean;
     }) => {
         this.state.id = message.id ?? null;
         this.callbacks.onPeerId(this.state.id ?? '');
@@ -350,7 +400,11 @@ export class VoiceChatController {
         this.callbacks.onMuteDisabled(false);
         this.callbacks.onUserName(message.userName ?? '');
         this.state.config = message.config ?? null;
+        this.state.debugSession = message.debug ?? false;
         this.updateAllPeerFilters();
+        if (this.state.debugSession && this.state.debugPosition) {
+            this.sendMessage({ type: 'debug-position', position: this.state.debugPosition });
+        }
 
         const peers = Array.isArray(message.peers) ? message.peers : [];
         peers.forEach((peerId) => {
@@ -504,20 +558,29 @@ export class VoiceChatController {
         const forwardX = Math.sin(yaw) * cosPitch;
         const forwardY = Math.sin(pitch);
         const forwardZ = -Math.cos(yaw) * cosPitch;
-        if (listener.positionX) {
-            listener.positionX.setValueAtTime(position.x, context.currentTime);
-            listener.positionY.setValueAtTime(position.y, context.currentTime);
-            listener.positionZ.setValueAtTime(position.z, context.currentTime);
-            listener.forwardX.setValueAtTime(forwardX, context.currentTime);
-            listener.forwardY.setValueAtTime(forwardY, context.currentTime);
-            listener.forwardZ.setValueAtTime(forwardZ, context.currentTime);
-            listener.upX.setValueAtTime(0, context.currentTime);
-            listener.upY.setValueAtTime(1, context.currentTime);
-            listener.upZ.setValueAtTime(0, context.currentTime);
-        } else if (listener.setPosition && listener.setOrientation) {
-            listener.setPosition(position.x, position.y, position.z);
-            listener.setOrientation(forwardX, forwardY, forwardZ, 0, 1, 0);
+        if (
+            !listener.positionX ||
+            !listener.positionY ||
+            !listener.positionZ ||
+            !listener.forwardX ||
+            !listener.forwardY ||
+            !listener.forwardZ ||
+            !listener.upX ||
+            !listener.upY ||
+            !listener.upZ
+        ) {
+            return;
         }
+        debugger;
+        listener.positionX.setValueAtTime(position.x, context.currentTime);
+        listener.positionY.setValueAtTime(position.y, context.currentTime);
+        listener.positionZ.setValueAtTime(position.z, context.currentTime);
+        listener.forwardX.setValueAtTime(forwardX, context.currentTime);
+        listener.forwardY.setValueAtTime(forwardY, context.currentTime);
+        listener.forwardZ.setValueAtTime(forwardZ, context.currentTime);
+        listener.upX.setValueAtTime(0, context.currentTime);
+        listener.upY.setValueAtTime(1, context.currentTime);
+        listener.upZ.setValueAtTime(0, context.currentTime);
     };
 
     private createAudioPipeline = (peerId: string, sourceInput: MediaStream | HTMLMediaElement) => {
@@ -593,6 +656,165 @@ export class VoiceChatController {
             return this.state.debugMic.pipeline;
         }
         return null;
+    };
+
+    private setupMicMeter = () => {
+        if (!this.state.localStream) {
+            return;
+        }
+        const context = this.ensureAudioContext();
+        this.teardownMicMeter();
+        this.micSource = context.createMediaStreamSource(this.state.localStream);
+        this.micAnalyser = context.createAnalyser();
+        this.micAnalyser.fftSize = 512;
+        this.micAnalyser.smoothingTimeConstant = 0.8;
+        this.micMeterGain = context.createGain();
+        this.micMeterGain.gain.value = 0.0001;
+        this.micSource.connect(this.micAnalyser);
+        this.micAnalyser.connect(this.micMeterGain);
+        this.micMeterGain.connect(context.destination);
+    };
+
+    private teardownMicMeter = () => {
+        this.micSource?.disconnect();
+        this.micAnalyser?.disconnect();
+        this.micMeterGain?.disconnect();
+        this.micSource = null;
+        this.micAnalyser = null;
+        this.micMeterGain = null;
+        this.updateSelfActivity(false);
+    };
+
+    private startMeterLoop = () => {
+        if (this.meterIntervalId !== null) {
+            return;
+        }
+        const intervalId = globalThis.setInterval(() => {
+            this.sampleMeters();
+        }, 150);
+        this.meterIntervalId = intervalId;
+        console.log(`[voicechat][meter] started interval=${intervalId}`);
+    };
+
+    private stopMeterLoop = () => {
+        if (this.meterIntervalId === null) {
+            return;
+        }
+        globalThis.clearInterval(this.meterIntervalId);
+        console.log(`[voicechat][meter] stopped interval=${this.meterIntervalId}`);
+        this.meterIntervalId = null;
+    };
+
+    private sampleMeters = () => {
+        if (this.state.audioContext?.state === 'suspended') {
+            this.state.audioContext.resume().catch(() => {
+                // Resume may fail if not called from a user gesture.
+            });
+        }
+        const now = performance.now();
+        if (this.micAnalyser) {
+            const active = this.isAnalyserActive(this.micAnalyser, 0.01);
+            this.updateTimedActivity(this.selfActivity, active, now, (value) => {
+                console.log("[voicechat][meter:self] update activity=", value);
+                this.updateSelfActivity(value);
+            });
+        }
+
+    };
+
+    private isAnalyserActive = (analyser: AnalyserNode, threshold: number) => {
+        let rms = 0;
+        let freqAverage = 0;
+        if (typeof analyser.getFloatTimeDomainData === 'function') {
+            const buffer = this.getMeterFloatBuffer(analyser);
+            analyser.getFloatTimeDomainData(buffer);
+            let sum = 0;
+            for (let i = 0; i < buffer.length; i += 1) {
+                const value = buffer[i];
+                sum += value * value;
+            }
+            rms = Math.sqrt(sum / buffer.length);
+            if (rms > threshold) {
+                return true;
+            }
+        }
+
+        const buffer = this.getMeterBuffer(analyser);
+        analyser.getByteTimeDomainData(buffer);
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i += 1) {
+            const normalized = (buffer[i] - 128) / 128;
+            sum += normalized * normalized;
+        }
+        rms = Math.sqrt(sum / buffer.length);
+        if (rms > threshold) {
+            return true;
+        }
+
+        const freqBuffer = this.getMeterFrequencyBuffer(analyser);
+        analyser.getByteFrequencyData(freqBuffer);
+        let freqSum = 0;
+        for (let i = 0; i < freqBuffer.length; i += 1) {
+            freqSum += freqBuffer[i];
+        }
+        freqAverage = freqSum / freqBuffer.length;
+        return freqAverage > 8;
+    };
+
+    private getMeterBuffer = (analyser: AnalyserNode) => {
+        const existing = this.meterBuffers.get(analyser);
+        if (existing && existing.length === analyser.fftSize) {
+            return existing;
+        }
+        const buffer = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
+        this.meterBuffers.set(analyser, buffer);
+        return buffer;
+    };
+
+    private getMeterFloatBuffer = (analyser: AnalyserNode) => {
+        const existing = this.meterFloatBuffers.get(analyser);
+        if (existing && existing.length === analyser.fftSize) {
+            return existing;
+        }
+        const buffer = new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>;
+        this.meterFloatBuffers.set(analyser, buffer);
+        return buffer;
+    };
+
+    private getMeterFrequencyBuffer = (analyser: AnalyserNode) => {
+        const length = analyser.frequencyBinCount;
+        const existing = this.meterFreqBuffers.get(analyser);
+        if (existing && existing.length === length) {
+            return existing;
+        }
+        const buffer = new Uint8Array(length) as Uint8Array<ArrayBuffer>;
+        this.meterFreqBuffers.set(analyser, buffer);
+        return buffer;
+    };
+
+    private updateTimedActivity = (
+        state: { active: boolean; lastActiveAt: number },
+        activeNow: boolean,
+        now: number,
+        apply: (value: boolean) => void,
+    ) => {
+        if (activeNow) {
+            state.lastActiveAt = now;
+        }
+        const shouldBeActive = activeNow || now - state.lastActiveAt < 300;
+        if (shouldBeActive !== state.active) {
+            apply(shouldBeActive);
+        }
+    };
+
+    private updateSelfActivity = (active: boolean) => {
+        console.log(`[voicechat][activity:self] updateSelfActivity active=${active} selfActive=${this.selfActivity.active}`);
+        if (this.selfActivity.active === active) {
+            return;
+        }
+        this.selfActivity.active = active;
+        console.log(`[voicechat][activity:self] ${active ? 'Speaking' : 'Silent'}`);
+        this.callbacks.onSelfActivity(active);
     };
 
     private smoothParam = (param: AudioParam, value: number) => {

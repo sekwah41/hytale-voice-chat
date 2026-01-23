@@ -13,6 +13,8 @@ public class VoiceChatTokenStore {
 
     private final Map<String, TokenEntry> tokensByValue = new ConcurrentHashMap<>();
     private final Map<UUID, Map<String, Long>> tokensByUser = new ConcurrentHashMap<>();
+    private final Map<String, TokenEntry> debugTokensByValue = new ConcurrentHashMap<>();
+    private final Map<UUID, TokenEntry> debugSessionsByUser = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
     private final Config<VoiceChatSessionsConfig> sessionConfig;
 
@@ -40,9 +42,28 @@ public class VoiceChatTokenStore {
         return token;
     }
 
-    public UUID consumeTokenForUser(String token) {
+    public String createDebugToken(UUID userId, Duration ttl) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId must be provided");
+        }
+        purgeExpired();
+        String token = new UUID(random.nextLong(), random.nextLong()).toString().replace("-", "");
+        long expiresAt = System.currentTimeMillis() + ttl.toMillis();
+        debugTokensByValue.put(token, new TokenEntry(userId, expiresAt));
+        return token;
+    }
+
+    public TokenInfo consumeToken(String token) {
         if (token == null || token.isBlank()) {
             return null;
+        }
+        TokenEntry debugEntry = debugTokensByValue.remove(token);
+        if (debugEntry != null) {
+            if (debugEntry.expiresAt < System.currentTimeMillis()) {
+                return null;
+            }
+            debugSessionsByUser.put(debugEntry.userId, debugEntry);
+            return new TokenInfo(debugEntry.userId, true);
         }
         TokenEntry entry = tokensByValue.remove(token);
         if (entry != null) {
@@ -54,10 +75,25 @@ public class VoiceChatTokenStore {
             var voiceChatConfig = this.sessionConfig.get();
             voiceChatConfig.setSessionToken(entry.userId, token);
             this.sessionConfig.save();
-            return entry.userId;
+            return new TokenInfo(entry.userId, false);
         }
 
-        return this.sessionConfig.get().getUserUUIDFromToken(token);
+        UUID userId = this.sessionConfig.get().getUserUUIDFromToken(token);
+        return userId == null ? null : new TokenInfo(userId, false);
+    }
+
+    public boolean isDebugUser(UUID userId) {
+        if (userId == null) {
+            return false;
+        }
+        return debugSessionsByUser.containsKey(userId);
+    }
+
+    public void clearDebugSession(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        debugSessionsByUser.remove(userId);
     }
 
     private void purgeExpired() {
@@ -69,6 +105,7 @@ public class VoiceChatTokenStore {
             }
             return false;
         });
+        debugTokensByValue.entrySet().removeIf(entry -> entry.getValue().expiresAt < now);
     }
 
     private void removeTokenForUser(UUID userId, String token) {
@@ -91,4 +128,6 @@ public class VoiceChatTokenStore {
             this.expiresAt = expiresAt;
         }
     }
+
+    public record TokenInfo(UUID userId, boolean debug) {}
 }

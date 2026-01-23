@@ -37,6 +37,7 @@ public class VoiceChat extends JavaPlugin {
     @Override
     protected void setup() {
         super.setup();
+
         CONFIG.save();
         SESSIONS_CONFIG.save();
         this.service = new VoiceChatService(CONFIG, SESSIONS_CONFIG);

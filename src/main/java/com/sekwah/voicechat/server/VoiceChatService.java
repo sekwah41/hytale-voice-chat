@@ -47,6 +47,16 @@ public class VoiceChatService {
         return appendToken(publicUrl, token);
     }
 
+    public String createDebugSessionUrl() {
+        VoiceChatConfig current = config.get();
+        Duration ttl = Duration.ofSeconds(Math.max(30, current.getVoiceChatTokenTtlSeconds()));
+        UUID debugUserId = UUID.randomUUID();
+        String token = tokens.createDebugToken(debugUserId, ttl);
+        String url = appendQueryParam(publicUrl, "debug", "1");
+        url = appendQueryParam(url, "debugaudio", "1");
+        return appendToken(url, token);
+    }
+
     private String resolvePublicUrl(VoiceChatConfig current, int port) {
         String base = current.getVoiceChatPublicUrl();
         if (base == null || base.isBlank()) {
@@ -112,6 +122,13 @@ public class VoiceChatService {
             return baseUrl + "&token=" + token;
         }
         return baseUrl + "?token=" + token;
+    }
+
+    private String appendQueryParam(String baseUrl, String key, String value) {
+        if (baseUrl.contains("?")) {
+            return baseUrl + "&" + key + "=" + value;
+        }
+        return baseUrl + "?" + key + "=" + value;
     }
 
     public void playerDisconnected(UUID playerUuid) {
